@@ -2,11 +2,13 @@
 
 A VS Code sidebar for running multiple Claude Code agents across multiple initiatives without losing track of them.
 
-An **initiative** is a unit of work — "Auth revamp", "Billing migration". Each one gets its own **git worktree** on its own branch, so initiatives never touch each other's files, and holds three things:
+An **initiative** is a unit of work — "Auth revamp", "Billing migration". It holds three things:
 
 - **Agents** — three Claude sessions, each pinned to a model;
-- **Docs** — markdown and other files that belong to the initiative;
-- **Shells** — plain terminals in the worktree, no Claude attached.
+- **Docs** — notes that belong to the initiative, kept out of the repo;
+- **Shells** — plain terminals in the initiative's directory, no Claude attached.
+
+When you create an initiative you choose where it runs: **in the repo you have open**, or in **a git worktree of its own** on a new branch, so that parallel initiatives never touch each other's files. Agentrus only ever deletes a worktree it created.
 
 The agents:
 
@@ -24,7 +26,13 @@ Each agent's conversation is named `{initiative}-{agent}` — `Auth revamp-archi
 
 The name deliberately leaves out the model, so switching an agent from `fable` to `opus` keeps its conversation instead of renaming it out of reach. "Start fresh" bumps a suffix (`Auth revamp-architect-2`), since a same-named session would otherwise just resume the old one.
 
-Git is the source of truth for worktrees. On startup Agentrus reconciles its list against `git worktree list`, so a worktree you removed by hand disappears from the sidebar instead of lingering as a dead entry.
+Git is the source of truth for worktrees. On startup Agentrus reconciles its list against `git worktree list`, so a worktree you removed by hand disappears from the sidebar instead of lingering as a dead entry. Initiatives that just use the repo as-is are never pruned this way.
+
+### Docs
+
+Docs are **not** stored in your repo — there is nothing to commit and nothing to gitignore. They live in the extension's global storage, one folder per initiative, so they also survive the initiative's worktree being deleted.
+
+Agents are launched with `--add-dir <that folder>`, so they can read and write the docs even though the docs sit outside the working tree. Use **Reveal Docs Folder** on the Docs group to open it in Finder.
 
 ## Usage
 

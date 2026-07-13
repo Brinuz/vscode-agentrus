@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { basename } from "node:path";
 import * as vscode from "vscode";
 import { Agent, agentKey, Doc, Initiative, ROLE_ICONS, Shell, shellKey } from "./model";
 import { Store } from "./store";
@@ -11,16 +11,20 @@ export class InitiativeItem extends vscode.TreeItem {
 
   constructor(readonly initiative: Initiative) {
     super(initiative.name, vscode.TreeItemCollapsibleState.Expanded);
-    this.description = initiative.branch;
+    const managed = initiative.managed ?? true;
+    this.description = initiative.branch ?? basename(initiative.worktreePath);
     this.tooltip = new vscode.MarkdownString(
       [
         `**${initiative.name}**`,
         "",
-        `Branch: \`${initiative.branch}\``,
-        `Worktree: \`${initiative.worktreePath}\``,
-      ].join("\n"),
+        initiative.branch ? `Branch: \`${initiative.branch}\`` : "",
+        `${managed ? "Worktree" : "Directory"}: \`${initiative.worktreePath}\``,
+        managed ? "" : "\nUses the repo as-is — no worktree of its own.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
     );
-    this.iconPath = new vscode.ThemeIcon("git-branch");
+    this.iconPath = new vscode.ThemeIcon(managed ? "git-branch" : "repo");
     this.resourceUri = vscode.Uri.file(initiative.worktreePath);
   }
 }
@@ -114,10 +118,9 @@ export class DocItem extends vscode.TreeItem {
     readonly doc: Doc,
   ) {
     super(doc.name, vscode.TreeItemCollapsibleState.None);
-    const absolute = join(initiative.worktreePath, doc.path);
-    this.description = doc.path;
-    this.tooltip = absolute;
-    this.resourceUri = vscode.Uri.file(absolute);
+    this.description = basename(doc.path);
+    this.tooltip = doc.path;
+    this.resourceUri = vscode.Uri.file(doc.path);
     this.command = {
       command: "vscode.open",
       title: "Open Doc",

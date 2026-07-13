@@ -18,7 +18,10 @@ export interface Shell {
   name: string;
 }
 
-/** A file that belongs to the initiative. Path is relative to the worktree. */
+/**
+ * A file that belongs to the initiative. Absolute: docs normally live in the
+ * extension's storage, but a linked file can be anywhere.
+ */
 export interface Doc {
   id: string;
   name: string;
@@ -28,9 +31,15 @@ export interface Doc {
 export interface Initiative {
   id: string;
   name: string;
-  branch: string;
-  /** Absolute path of the git worktree backing this initiative. */
+  /** Branch the initiative works on. Absent when it just uses the repo as-is. */
+  branch?: string;
+  /** Absolute directory the agents, shells and docs run in. */
   worktreePath: string;
+  /**
+   * Whether Agentrus created the worktree. Only then may it remove the
+   * directory, or treat a missing worktree as a dead initiative.
+   */
+  managed?: boolean;
   agents: Agent[];
   shells: Shell[];
   docs: Doc[];

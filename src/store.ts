@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isAbsolute, join } from "node:path";
 import * as vscode from "vscode";
 import { Agent, Doc, Initiative, Role, ROLES, Shell } from "./model";
 import { canonical, listWorktrees } from "./git";
@@ -14,7 +15,13 @@ export class Store {
       // Stored before shells and docs existed: the tree would throw on the
       // missing arrays.
       shells: i.shells ?? [],
-      docs: i.docs ?? [],
+      // Doc paths used to be relative to the worktree, before docs moved out
+      // of the repo and into the extension's storage.
+      docs: (i.docs ?? []).map((doc) =>
+        isAbsolute(doc.path) ? doc : { ...doc, path: join(i.worktreePath, doc.path) },
+      ),
+      // Every initiative predating the prompt owned its worktree.
+      managed: i.managed ?? true,
       // Agents used to be identified by a minted UUID and their conversations
       // were created without a title, so there is no name to resume them by.
       // Start those agents over rather than resuming into an error.
@@ -34,12 +41,18 @@ export class Store {
     return this.initiatives.find((i) => i.id === id);
   }
 
-  async add(name: string, branch: string, worktreePath: string): Promise<Initiative> {
+  async add(
+    name: string,
+    worktreePath: string,
+    branch: string | undefined,
+    managed: boolean,
+  ): Promise<Initiative> {
     const initiative: Initiative = {
       id: randomUUID(),
       name,
       branch,
       worktreePath,
+      managed,
       createdAt: Date.now(),
       agents: ROLES.map((role) => ({
         role,
@@ -121,6 +134,9 @@ export class Store {
    * Drop initiatives whose worktree no longer exists. Git is the source of
    * truth: if the user ran `git worktree remove` by hand, the tree should not
    * keep showing an initiative that has nowhere to run.
+   *
+   * Only applies to worktrees Agentrus created. An initiative that just uses
+   * the repo as-is has no worktree of its own and must never be pruned.
    */
   async reconcile(root: string): Promise<boolean> {
     let live: Set<string>;
@@ -131,7 +147,9 @@ export class Store {
     }
     const before = this.initiatives.length;
     const survivors = await Promise.all(
-      this.initiatives.map(async (i) => (live.has(await canonical(i.worktreePath)) ? i : undefined)),
+      this.initiatives.map(async (i) =>
+        !i.managed || live.has(await canonical(i.worktreePath)) ? i : undefined,
+      ),
     );
     this.initiatives = survivors.filter((i): i is Initiative => i !== undefined);
     if (this.initiatives.length === before) {

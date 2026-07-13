@@ -1,11 +1,13 @@
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import * as vscode from "vscode";
+import { ensureDocsDir } from "./docs";
 import { addWorktree, currentRef, deleteBranch, removeWorktree, repoRoot } from "./git";
 import { agentKey, Initiative, ROLE_ICONS, shellKey } from "./model";
 import { launchCommand, sessionName } from "./sessions";
 import { Store } from "./store";
 import { Terminals } from "./terminals";
 import { AgentItem, DocItem, GroupItem, InitiativeItem, InitiativeTree, ShellItem } from "./tree";
+import { message, slugify } from "./util";
 
 const KNOWN_MODELS = ["fable", "opus", "sonnet", "haiku"];
 
@@ -41,16 +43,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       .getConfiguration("agentrus")
       .get<string>("claudeCommand", "claude");
 
+    // Claude refuses to --add-dir a directory that does not exist yet.
+    const docs = await ensureDocsDir(context, item.initiative);
+
     const started = item.agent.started ?? false;
     const created = terminals.open(item.initiative, {
       key: agentKey(item.agent),
       name: sessionName(item.initiative, item.agent),
       icon: ROLE_ICONS[item.agent.role],
-      command: launchCommand(claudeCommand, item.initiative, item.agent, started),
+      command: launchCommand(claudeCommand, item.initiative, item.agent, started, docs),
     });
 
-    // The id is claimed the moment we launch: from here on, `--session-id`
-    // would fail with "already in use" and we must resume instead.
+    // The conversation exists the moment we launch: from here on we resume it.
     if (created && !started) {
       await store.updateAgent(item.initiative.id, item.agent.role, { started: true });
       tree.refresh();
@@ -141,7 +145,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       async (item: InitiativeItem | GroupItem) => {
         const name = await vscode.window.showInputBox({
           title: `New shell — ${item.initiative.name}`,
-          prompt: "A plain terminal in this initiative's worktree.",
+          prompt: "A plain terminal in this initiative's directory.",
           value: `shell ${item.initiative.shells.length + 1}`,
         });
         if (!name) {
@@ -177,9 +181,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "agentrus.addDoc",
       async (item: InitiativeItem | GroupItem) => {
-        await addDoc(item.initiative, store, tree);
+        await addDoc(context, item.initiative, store, tree);
       },
     ),
+
+    vscode.commands.registerCommand("agentrus.revealDocsFolder", async (item: GroupItem) => {
+      const dir = await ensureDocsDir(context, item.initiative);
+      await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
+    }),
 
     vscode.commands.registerCommand("agentrus.removeDoc", async (item: DocItem) => {
       // Unlink only. Deleting the user's file because they tidied a tree entry
@@ -209,7 +218,79 @@ async function findRepoRoot(): Promise<string | undefined> {
   return repoRoot(folder.uri.fsPath);
 }
 
-async function addDoc(initiative: Initiative, store: Store, tree: InitiativeTree): Promise<void> {
+async function createInitiative(root: string, store: Store, tree: InitiativeTree): Promise<void> {
+  const name = await vscode.window.showInputBox({
+    title: "New initiative",
+    prompt: "Name this initiative — it gets an architect, a dev and a reviewer agent.",
+    placeHolder: "Auth revamp",
+    validateInput: (value) => (slugify(value) ? undefined : "Give it a name with some letters or digits."),
+  });
+  if (!name) {
+    return;
+  }
+
+  const config = vscode.workspace.getConfiguration("agentrus");
+  const slug = slugify(name);
+  const branch = `${config.get<string>("branchPrefix", "initiative/")}${slug}`;
+  const proposed = join(worktreeRoot(root, config.get<string>("worktreeRoot", "")), slug);
+
+  const where = await vscode.window.showQuickPick(
+    [
+      {
+        label: "$(repo) Work in this repo",
+        detail: root,
+        description: "No worktree — agents run in the folder you have open",
+        id: "repo" as const,
+      },
+      {
+        label: "$(git-branch) Create a git worktree",
+        detail: proposed,
+        description: `Isolated checkout on a new branch "${branch}"`,
+        id: "worktree" as const,
+      },
+    ],
+    { title: `Where should "${name}" run?` },
+  );
+  if (!where) {
+    return;
+  }
+
+  if (where.id === "repo") {
+    await store.add(name, root, await currentRef(root), false);
+    tree.refresh();
+    return;
+  }
+
+  const baseRef = await vscode.window.showInputBox({
+    title: "Branch this initiative off which ref?",
+    value: await currentRef(root),
+    prompt: `Creates branch "${branch}" and a worktree at ${proposed}`,
+  });
+  if (!baseRef) {
+    return;
+  }
+
+  let created: string;
+  try {
+    created = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Creating worktree for "${name}"…` },
+      () => addWorktree(root, proposed, branch, baseRef),
+    );
+  } catch (error) {
+    vscode.window.showErrorMessage(`Could not create the worktree: ${message(error)}`);
+    return;
+  }
+
+  await store.add(name, created, branch, true);
+  tree.refresh();
+}
+
+async function addDoc(
+  context: vscode.ExtensionContext,
+  initiative: Initiative,
+  store: Store,
+  tree: InitiativeTree,
+): Promise<void> {
   const choice = await vscode.window.showQuickPick(
     [
       { label: "$(new-file) New markdown file", id: "new" as const },
@@ -231,12 +312,7 @@ async function addDoc(initiative: Initiative, store: Store, tree: InitiativeTree
     if (!file) {
       return;
     }
-    const rel = relative(initiative.worktreePath, file.fsPath);
-    if (rel.startsWith("..") || isAbsolute(rel)) {
-      vscode.window.showErrorMessage("Pick a file inside the initiative's worktree.");
-      return;
-    }
-    await store.addDoc(initiative.id, basename(file.fsPath), rel);
+    await store.addDoc(initiative.id, basename(file.fsPath), file.fsPath);
     tree.refresh();
     await vscode.commands.executeCommand("vscode.open", file);
     return;
@@ -244,7 +320,7 @@ async function addDoc(initiative: Initiative, store: Store, tree: InitiativeTree
 
   const name = await vscode.window.showInputBox({
     title: `New doc — ${initiative.name}`,
-    prompt: "Created under docs/ in the initiative's worktree.",
+    prompt: "Kept outside the repo, so it is never committed.",
     placeHolder: "Design notes",
     validateInput: (value) => (slugify(value) ? undefined : "Give it a name with some letters or digits."),
   });
@@ -252,8 +328,8 @@ async function addDoc(initiative: Initiative, store: Store, tree: InitiativeTree
     return;
   }
 
-  const rel = join("docs", `${slugify(name)}.md`);
-  const uri = vscode.Uri.file(join(initiative.worktreePath, rel));
+  const dir = await ensureDocsDir(context, initiative);
+  const uri = vscode.Uri.file(join(dir, `${slugify(name)}.md`));
   try {
     await vscode.workspace.fs.stat(uri);
   } catch {
@@ -261,49 +337,9 @@ async function addDoc(initiative: Initiative, store: Store, tree: InitiativeTree
     await vscode.workspace.fs.writeFile(uri, Buffer.from(`# ${name}\n`, "utf8"));
   }
 
-  await store.addDoc(initiative.id, name, rel);
+  await store.addDoc(initiative.id, name, uri.fsPath);
   tree.refresh();
   await vscode.commands.executeCommand("vscode.open", uri);
-}
-
-async function createInitiative(root: string, store: Store, tree: InitiativeTree): Promise<void> {
-  const name = await vscode.window.showInputBox({
-    title: "New initiative",
-    prompt: "Name this initiative — it gets its own branch, worktree, and three agents.",
-    placeHolder: "Auth revamp",
-    validateInput: (value) => (slugify(value) ? undefined : "Give it a name with some letters or digits."),
-  });
-  if (!name) {
-    return;
-  }
-
-  const config = vscode.workspace.getConfiguration("agentrus");
-  const slug = slugify(name);
-  const branch = `${config.get<string>("branchPrefix", "initiative/")}${slug}`;
-  const worktreePath = join(worktreeRoot(root, config.get<string>("worktreeRoot", "")), slug);
-
-  const baseRef = await vscode.window.showInputBox({
-    title: "Branch this initiative off which ref?",
-    value: await currentRef(root),
-    prompt: `Creates branch "${branch}" and a worktree at ${worktreePath}`,
-  });
-  if (!baseRef) {
-    return;
-  }
-
-  let created: string;
-  try {
-    created = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Creating worktree for "${name}"…` },
-      () => addWorktree(root, worktreePath, branch, baseRef),
-    );
-  } catch (error) {
-    vscode.window.showErrorMessage(`Could not create the worktree: ${message(error)}`);
-    return;
-  }
-
-  await store.add(name, branch, created);
-  tree.refresh();
 }
 
 async function removeInitiative(
@@ -313,11 +349,32 @@ async function removeInitiative(
   terminals: Terminals,
   tree: InitiativeTree,
 ): Promise<void> {
+  terminals.disposeInitiative(initiative);
+
+  // Nothing on disk is ours to delete: the initiative just pointed at a repo
+  // the user already had.
+  if (!initiative.managed) {
+    const confirmed = await vscode.window.showWarningMessage(
+      `Remove initiative "${initiative.name}"?`,
+      {
+        modal: true,
+        detail: "Its agents and shells are forgotten. No files are deleted — this initiative has no worktree of its own, and its docs stay where they are.",
+      },
+      "Remove",
+    );
+    if (confirmed !== "Remove") {
+      return;
+    }
+    await store.remove(initiative.id);
+    tree.refresh();
+    return;
+  }
+
   const confirmed = await vscode.window.showWarningMessage(
     `Remove initiative "${initiative.name}"?`,
     {
       modal: true,
-      detail: `This deletes the worktree at ${initiative.worktreePath} and closes its terminals. The branch "${initiative.branch}" is kept unless you choose otherwise.`,
+      detail: `This deletes the worktree at ${initiative.worktreePath}. The branch "${initiative.branch}" is kept unless you choose otherwise, and the initiative's docs are kept either way.`,
     },
     "Remove worktree",
     "Remove worktree and branch",
@@ -325,8 +382,6 @@ async function removeInitiative(
   if (!confirmed) {
     return;
   }
-
-  terminals.disposeInitiative(initiative);
 
   try {
     await removeWorktree(root, initiative.worktreePath, false);
@@ -349,7 +404,7 @@ async function removeInitiative(
     }
   }
 
-  if (confirmed === "Remove worktree and branch") {
+  if (confirmed === "Remove worktree and branch" && initiative.branch) {
     try {
       await deleteBranch(root, initiative.branch, true);
     } catch (error) {
@@ -368,21 +423,4 @@ function worktreeRoot(root: string, configured: string): string {
     return join(dirname(root), `${basename(root)}-worktrees`);
   }
   return isAbsolute(configured) ? configured : resolve(root, configured);
-}
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function message(error: unknown): string {
-  if (error && typeof error === "object" && "stderr" in error) {
-    const stderr = String((error as { stderr: unknown }).stderr).trim();
-    if (stderr) {
-      return stderr;
-    }
-  }
-  return error instanceof Error ? error.message : String(error);
 }

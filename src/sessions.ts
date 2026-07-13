@@ -18,15 +18,20 @@ export function sessionName(initiative: Initiative, agent: Agent): string {
 /**
  * Claude cannot tell us whether a session exists (no list command), so we
  * remember whether we have launched this agent and resume from then on.
+ *
+ * `docsDir` sits outside the working tree, so it is granted explicitly with
+ * --add-dir; without it the agent could not read the initiative's docs.
  */
 export function launchCommand(
   claudeCommand: string,
   initiative: Initiative,
   agent: Agent,
   started: boolean,
+  docsDir: string,
 ): string {
   const name = quote(sessionName(initiative, agent));
-  const create = `${claudeCommand} --name ${name} --model ${agent.model}`;
+  const flags = `--model ${agent.model} --add-dir ${quote(docsDir)}`;
+  const create = `${claudeCommand} --name ${name} ${flags}`;
   if (!started) {
     return create;
   }
@@ -34,10 +39,10 @@ export function launchCommand(
   // Resume, falling back to creating it: an agent whose terminal was closed
   // before its first message has no conversation to resume, and would
   // otherwise be stuck failing forever.
-  return `${claudeCommand} --resume ${name} --model ${agent.model} || ${create}`;
+  return `${claudeCommand} --resume ${name} ${flags} || ${create}`;
 }
 
-/** Names carry spaces, so they have to survive the shell. */
+/** Names and paths carry spaces, so they have to survive the shell. */
 function quote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
