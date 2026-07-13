@@ -1,0 +1,206 @@
+{
+  "name": "agentrus",
+  "displayName": "Agentrus",
+  "description": "Organize Claude Code work into initiatives, each with its own git worktree and a pinned set of agents.",
+  "version": "0.0.1",
+  "publisher": "bmonteiro",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentrus",
+          "title": "Agentrus",
+          "icon": "resources/agentrus.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentrus": [
+        {
+          "id": "agentrus.initiatives",
+          "name": "Initiatives",
+          "icon": "resources/agentrus.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "agentrus.initiatives",
+        "contents": "No initiatives yet.\n\nAn initiative is a git worktree on its own branch, with an architect, a dev and a reviewer agent pinned to it.\n[Create initiative](command:agentrus.createInitiative)",
+        "when": "agentrus.hasRepo"
+      },
+      {
+        "view": "agentrus.initiatives",
+        "contents": "Agentrus needs an open folder that is a git repository.\n[Open folder](command:vscode.openFolder)",
+        "when": "!agentrus.hasRepo"
+      }
+    ],
+    "commands": [
+      {
+        "command": "agentrus.createInitiative",
+        "title": "Agentrus: Create Initiative",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentrus.refresh",
+        "title": "Agentrus: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agentrus.openAgent",
+        "title": "Agentrus: Open Agent Session"
+      },
+      {
+        "command": "agentrus.openAllAgents",
+        "title": "Agentrus: Open All Agents",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "agentrus.openWorktreeWindow",
+        "title": "Agentrus: Open Worktree in New Window",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "agentrus.removeInitiative",
+        "title": "Agentrus: Remove Initiative",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentrus.changeModel",
+        "title": "Agentrus: Change Agent Model",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "agentrus.resetSession",
+        "title": "Agentrus: Start Fresh Session",
+        "icon": "$(debug-restart)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentrus.createInitiative",
+          "when": "view == agentrus.initiatives",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentrus.refresh",
+          "when": "view == agentrus.initiatives",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "agentrus.openAllAgents",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentrus.openWorktreeWindow",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentrus.removeInitiative",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "1_modify"
+        },
+        {
+          "command": "agentrus.changeModel",
+          "when": "view == agentrus.initiatives && viewItem == agent",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentrus.resetSession",
+          "when": "view == agentrus.initiatives && viewItem == agent",
+          "group": "1_modify"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "agentrus.openAgent",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.openAllAgents",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.openWorktreeWindow",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.removeInitiative",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.changeModel",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.resetSession",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Agentrus",
+      "properties": {
+        "agentrus.models.architect": {
+          "type": "string",
+          "default": "fable",
+          "description": "Model alias used for new architect agents."
+        },
+        "agentrus.models.dev": {
+          "type": "string",
+          "default": "opus",
+          "description": "Model alias used for new dev agents."
+        },
+        "agentrus.models.reviewer": {
+          "type": "string",
+          "default": "fable",
+          "description": "Model alias used for new reviewer agents."
+        },
+        "agentrus.worktreeRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Directory that holds initiative worktrees. Relative paths resolve against the repository root. Defaults to a sibling folder named '<repo>-worktrees'."
+        },
+        "agentrus.branchPrefix": {
+          "type": "string",
+          "default": "initiative/",
+          "description": "Prefix applied to the branch created for each initiative."
+        },
+        "agentrus.claudeCommand": {
+          "type": "string",
+          "default": "claude",
+          "description": "Command used to launch Claude Code."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run check-types && node esbuild.js --production",
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}
