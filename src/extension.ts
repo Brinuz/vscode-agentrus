@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import * as vscode from "vscode";
 import { addWorktree, currentRef, deleteBranch, removeWorktree, repoRoot } from "./git";
+import { agentKey, Initiative, ROLE_ICONS, shellKey } from "./model";
+import { launchCommand, terminalName } from "./sessions";
 import { Store } from "./store";
 import { Terminals } from "./terminals";
-import { AgentItem, InitiativeItem, InitiativeTree } from "./tree";
+import { AgentItem, DocItem, GroupItem, InitiativeItem, InitiativeTree, ShellItem } from "./tree";
 
 const KNOWN_MODELS = ["fable", "opus", "sonnet", "haiku"];
 
@@ -35,6 +37,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return current;
   };
 
+  const openAgent = async (item: AgentItem): Promise<void> => {
+    const claudeCommand = vscode.workspace
+      .getConfiguration("agentrus")
+      .get<string>("claudeCommand", "claude");
+
+    const started = item.agent.started ?? false;
+    const created = terminals.open(item.initiative, {
+      key: agentKey(item.agent),
+      name: terminalName(item.initiative, item.agent),
+      icon: ROLE_ICONS[item.agent.role],
+      command: launchCommand(claudeCommand, item.agent, started),
+    });
+
+    // The id is claimed the moment we launch: from here on, `--session-id`
+    // would fail with "already in use" and we must resume instead.
+    if (created && !started) {
+      await store.updateAgent(item.initiative.id, item.agent.role, { started: true });
+      tree.refresh();
+    }
+  };
+
   context.subscriptions.push(
     vscode.commands.registerCommand("agentrus.refresh", async () => {
       const current = await findRepoRoot();
@@ -46,21 +69,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand("agentrus.createInitiative", async () => {
       const current = await requireRoot();
-      if (!current) {
-        return;
-      }
-      await createInitiative(current, store, tree);
-    }),
-
-    vscode.commands.registerCommand("agentrus.openAgent", async (item: AgentItem) => {
-      await terminals.open(item.initiative, item.agent);
-    }),
-
-    vscode.commands.registerCommand("agentrus.openAllAgents", async (item: InitiativeItem) => {
-      for (const agent of item.initiative.agents) {
-        await terminals.open(item.initiative, agent);
+      if (current) {
+        await createInitiative(current, store, tree);
       }
     }),
+
+    vscode.commands.registerCommand("agentrus.openAgent", openAgent),
+
+    vscode.commands.registerCommand(
+      "agentrus.openAllAgents",
+      async (item: InitiativeItem | GroupItem) => {
+        for (const agent of item.initiative.agents) {
+          await openAgent(new AgentItem(item.initiative, agent, false));
+        }
+      },
+    ),
 
     vscode.commands.registerCommand("agentrus.openWorktreeWindow", async (item: InitiativeItem) => {
       await vscode.commands.executeCommand(
@@ -84,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await store.updateAgent(item.initiative.id, item.agent.role, { model: picked.label });
       tree.refresh();
 
-      if (terminals.isRunning(item.initiative, item.agent)) {
+      if (terminals.isRunning(item.initiative, agentKey(item.agent))) {
         vscode.window.showInformationMessage(
           `${item.agent.role} will use ${picked.label} next time its terminal starts. Close the running terminal to switch now.`,
         );
@@ -97,24 +120,78 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         {
           modal: true,
           detail:
-            "This agent will point at a brand new conversation. The existing transcript stays on disk but Agentrus will no longer link to it.",
+            "This agent will point at a brand new conversation. The existing one is left alone, but Agentrus will no longer link to it.",
         },
         "Start fresh",
       );
       if (confirmed !== "Start fresh") {
         return;
       }
-      terminals.disposeAgent(item.initiative, item.agent);
-      await store.updateAgent(item.initiative.id, item.agent.role, { sessionId: randomUUID() });
+      terminals.disposeKey(item.initiative, agentKey(item.agent));
+      await store.updateAgent(item.initiative.id, item.agent.role, {
+        sessionId: randomUUID(),
+        started: false,
+      });
+      tree.refresh();
+    }),
+
+    vscode.commands.registerCommand(
+      "agentrus.newShell",
+      async (item: InitiativeItem | GroupItem) => {
+        const name = await vscode.window.showInputBox({
+          title: `New shell — ${item.initiative.name}`,
+          prompt: "A plain terminal in this initiative's worktree.",
+          value: `shell ${item.initiative.shells.length + 1}`,
+        });
+        if (!name) {
+          return;
+        }
+        const shell = await store.addShell(item.initiative.id, name);
+        if (!shell) {
+          return;
+        }
+        tree.refresh();
+        terminals.open(item.initiative, {
+          key: shellKey(shell),
+          name: `${item.initiative.name}-${shell.name}`,
+          icon: "terminal",
+        });
+      },
+    ),
+
+    vscode.commands.registerCommand("agentrus.openShell", (item: ShellItem) => {
+      terminals.open(item.initiative, {
+        key: shellKey(item.shell),
+        name: `${item.initiative.name}-${item.shell.name}`,
+        icon: "terminal",
+      });
+    }),
+
+    vscode.commands.registerCommand("agentrus.removeShell", async (item: ShellItem) => {
+      terminals.disposeKey(item.initiative, shellKey(item.shell));
+      await store.removeShell(item.initiative.id, item.shell.id);
+      tree.refresh();
+    }),
+
+    vscode.commands.registerCommand(
+      "agentrus.addDoc",
+      async (item: InitiativeItem | GroupItem) => {
+        await addDoc(item.initiative, store, tree);
+      },
+    ),
+
+    vscode.commands.registerCommand("agentrus.removeDoc", async (item: DocItem) => {
+      // Unlink only. Deleting the user's file because they tidied a tree entry
+      // would be a nasty surprise.
+      await store.removeDoc(item.initiative.id, item.doc.id);
       tree.refresh();
     }),
 
     vscode.commands.registerCommand("agentrus.removeInitiative", async (item: InitiativeItem) => {
       const current = await requireRoot();
-      if (!current) {
-        return;
+      if (current) {
+        await removeInitiative(current, item.initiative, store, terminals, tree);
       }
-      await removeInitiative(current, item.initiative, store, terminals, tree);
     }),
   );
 }
@@ -129,6 +206,63 @@ async function findRepoRoot(): Promise<string | undefined> {
     return undefined;
   }
   return repoRoot(folder.uri.fsPath);
+}
+
+async function addDoc(initiative: Initiative, store: Store, tree: InitiativeTree): Promise<void> {
+  const choice = await vscode.window.showQuickPick(
+    [
+      { label: "$(new-file) New markdown file", id: "new" as const },
+      { label: "$(link) Link an existing file", id: "link" as const },
+    ],
+    { title: `Add a doc to "${initiative.name}"` },
+  );
+  if (!choice) {
+    return;
+  }
+
+  if (choice.id === "link") {
+    const picked = await vscode.window.showOpenDialog({
+      title: "Link a file to this initiative",
+      defaultUri: vscode.Uri.file(initiative.worktreePath),
+      canSelectMany: false,
+    });
+    const file = picked?.[0];
+    if (!file) {
+      return;
+    }
+    const rel = relative(initiative.worktreePath, file.fsPath);
+    if (rel.startsWith("..") || isAbsolute(rel)) {
+      vscode.window.showErrorMessage("Pick a file inside the initiative's worktree.");
+      return;
+    }
+    await store.addDoc(initiative.id, basename(file.fsPath), rel);
+    tree.refresh();
+    await vscode.commands.executeCommand("vscode.open", file);
+    return;
+  }
+
+  const name = await vscode.window.showInputBox({
+    title: `New doc — ${initiative.name}`,
+    prompt: "Created under docs/ in the initiative's worktree.",
+    placeHolder: "Design notes",
+    validateInput: (value) => (slugify(value) ? undefined : "Give it a name with some letters or digits."),
+  });
+  if (!name) {
+    return;
+  }
+
+  const rel = join("docs", `${slugify(name)}.md`);
+  const uri = vscode.Uri.file(join(initiative.worktreePath, rel));
+  try {
+    await vscode.workspace.fs.stat(uri);
+  } catch {
+    // Does not exist yet, so seed it rather than opening a phantom file.
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(`# ${name}\n`, "utf8"));
+  }
+
+  await store.addDoc(initiative.id, name, rel);
+  tree.refresh();
+  await vscode.commands.executeCommand("vscode.open", uri);
 }
 
 async function createInitiative(root: string, store: Store, tree: InitiativeTree): Promise<void> {
@@ -173,7 +307,7 @@ async function createInitiative(root: string, store: Store, tree: InitiativeTree
 
 async function removeInitiative(
   root: string,
-  initiative: ReturnType<Store["all"]>[number],
+  initiative: Initiative,
   store: Store,
   terminals: Terminals,
   tree: InitiativeTree,
@@ -182,7 +316,7 @@ async function removeInitiative(
     `Remove initiative "${initiative.name}"?`,
     {
       modal: true,
-      detail: `This deletes the worktree at ${initiative.worktreePath} and closes its agent terminals. The branch "${initiative.branch}" is kept unless you choose otherwise.`,
+      detail: `This deletes the worktree at ${initiative.worktreePath} and closes its terminals. The branch "${initiative.branch}" is kept unless you choose otherwise.`,
     },
     "Remove worktree",
     "Remove worktree and branch",

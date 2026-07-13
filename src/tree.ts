@@ -1,7 +1,10 @@
+import { join } from "node:path";
 import * as vscode from "vscode";
-import { Agent, Initiative, ROLE_ICONS } from "./model";
+import { Agent, agentKey, Doc, Initiative, ROLE_ICONS, Shell, shellKey } from "./model";
 import { Store } from "./store";
 import { Terminals } from "./terminals";
+
+export type GroupKind = "agents" | "docs" | "shells";
 
 export class InitiativeItem extends vscode.TreeItem {
   readonly contextValue = "initiative";
@@ -10,12 +13,42 @@ export class InitiativeItem extends vscode.TreeItem {
     super(initiative.name, vscode.TreeItemCollapsibleState.Expanded);
     this.description = initiative.branch;
     this.tooltip = new vscode.MarkdownString(
-      [`**${initiative.name}**`, "", `Branch: \`${initiative.branch}\``, `Worktree: \`${initiative.worktreePath}\``].join("\n"),
+      [
+        `**${initiative.name}**`,
+        "",
+        `Branch: \`${initiative.branch}\``,
+        `Worktree: \`${initiative.worktreePath}\``,
+      ].join("\n"),
     );
     this.iconPath = new vscode.ThemeIcon("git-branch");
     this.resourceUri = vscode.Uri.file(initiative.worktreePath);
   }
 }
+
+export class GroupItem extends vscode.TreeItem {
+  constructor(
+    readonly initiative: Initiative,
+    readonly kind: GroupKind,
+    count: number,
+  ) {
+    super(LABELS[kind], vscode.TreeItemCollapsibleState.Expanded);
+    this.contextValue = `group:${kind}`;
+    this.description = String(count);
+    this.iconPath = new vscode.ThemeIcon(GROUP_ICONS[kind]);
+  }
+}
+
+const LABELS: Record<GroupKind, string> = {
+  agents: "Agents",
+  docs: "Docs",
+  shells: "Shells",
+};
+
+const GROUP_ICONS: Record<GroupKind, string> = {
+  agents: "organization",
+  docs: "book",
+  shells: "terminal",
+};
 
 export class AgentItem extends vscode.TreeItem {
   readonly contextValue = "agent";
@@ -31,9 +64,11 @@ export class AgentItem extends vscode.TreeItem {
       [
         `**${agent.role}** — \`${agent.model}\``,
         "",
-        running ? "Terminal is open." : "Click to open; the session resumes where it left off.",
-        "",
-        `Session: \`${agent.sessionId}\``,
+        running
+          ? "Terminal is open."
+          : agent.started
+            ? "Click to reopen; the conversation resumes where it left off."
+            : "Click to start this agent's conversation.",
       ].join("\n"),
     );
     this.iconPath = new vscode.ThemeIcon(
@@ -48,7 +83,50 @@ export class AgentItem extends vscode.TreeItem {
   }
 }
 
-type Node = InitiativeItem | AgentItem;
+export class ShellItem extends vscode.TreeItem {
+  readonly contextValue = "shell";
+
+  constructor(
+    readonly initiative: Initiative,
+    readonly shell: Shell,
+    running: boolean,
+  ) {
+    super(shell.name, vscode.TreeItemCollapsibleState.None);
+    this.description = running ? "live" : undefined;
+    this.tooltip = `Terminal in ${initiative.worktreePath}`;
+    this.iconPath = new vscode.ThemeIcon(
+      "terminal",
+      running ? new vscode.ThemeColor("charts.green") : undefined,
+    );
+    this.command = {
+      command: "agentrus.openShell",
+      title: "Open Shell",
+      arguments: [this],
+    };
+  }
+}
+
+export class DocItem extends vscode.TreeItem {
+  readonly contextValue = "doc";
+
+  constructor(
+    readonly initiative: Initiative,
+    readonly doc: Doc,
+  ) {
+    super(doc.name, vscode.TreeItemCollapsibleState.None);
+    const absolute = join(initiative.worktreePath, doc.path);
+    this.description = doc.path;
+    this.tooltip = absolute;
+    this.resourceUri = vscode.Uri.file(absolute);
+    this.command = {
+      command: "vscode.open",
+      title: "Open Doc",
+      arguments: [this.resourceUri],
+    };
+  }
+}
+
+type Node = InitiativeItem | GroupItem | AgentItem | ShellItem | DocItem;
 
 export class InitiativeTree implements vscode.TreeDataProvider<Node> {
   private readonly changed = new vscode.EventEmitter<Node | undefined>();
@@ -71,12 +149,34 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
     if (!element) {
       return this.store.all().map((initiative) => new InitiativeItem(initiative));
     }
+
     if (element instanceof InitiativeItem) {
-      return element.initiative.agents.map(
-        (agent) =>
-          new AgentItem(element.initiative, agent, this.terminals.isRunning(element.initiative, agent)),
-      );
+      const { initiative } = element;
+      return [
+        new GroupItem(initiative, "agents", initiative.agents.length),
+        new GroupItem(initiative, "docs", initiative.docs.length),
+        new GroupItem(initiative, "shells", initiative.shells.length),
+      ];
     }
+
+    if (element instanceof GroupItem) {
+      const { initiative } = element;
+      switch (element.kind) {
+        case "agents":
+          return initiative.agents.map(
+            (agent) =>
+              new AgentItem(initiative, agent, this.terminals.isRunning(initiative, agentKey(agent))),
+          );
+        case "docs":
+          return initiative.docs.map((doc) => new DocItem(initiative, doc));
+        case "shells":
+          return initiative.shells.map(
+            (shell) =>
+              new ShellItem(initiative, shell, this.terminals.isRunning(initiative, shellKey(shell))),
+          );
+      }
+    }
+
     return [];
   }
 }

@@ -1,51 +1,30 @@
-import { readdir } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
-const PROJECTS_DIR = join(homedir(), ".claude", "projects");
+import { Agent, Initiative } from "./model";
 
 /**
- * True once Claude has written a transcript for this session id.
- *
- * Claude Code encodes the project cwd into the directory name under
- * ~/.claude/projects, and the encoding is undocumented, so we scan every
- * project directory for the transcript rather than reconstructing the path.
- * That keeps this working if the encoding ever changes, and it stays honest if
- * the user deletes a session behind our back.
+ * Claude has no way to tell us whether a session exists: there is no list
+ * command, and the transcript is not discoverable on disk by session id.
+ * Passing `--session-id` for an id that is already in use is a hard error
+ * ("Session ID <id> is already in use."), so we remember whether we have
+ * launched this agent before and resume from then on.
  */
-export async function sessionExists(sessionId: string): Promise<boolean> {
-  const target = `${sessionId}.jsonl`;
-  let projects: string[];
-  try {
-    projects = await readdir(PROJECTS_DIR);
-  } catch {
-    return false;
+export function launchCommand(
+  claudeCommand: string,
+  agent: Agent,
+  started: boolean,
+): string {
+  const claim = `${claudeCommand} --session-id ${agent.sessionId} --model ${agent.model}`;
+  if (!started) {
+    return claim;
   }
 
-  for (const project of projects) {
-    try {
-      const entries = await readdir(join(PROJECTS_DIR, project));
-      if (entries.includes(target)) {
-        return true;
-      }
-    } catch {
-      // Not a readable directory; skip it.
-    }
-  }
-  return false;
+  // Resume, but fall back to claiming the id if there is nothing to resume:
+  // an agent whose terminal was closed before its first message never got a
+  // conversation, and would otherwise be stuck failing to resume forever.
+  const resume = `${claudeCommand} --resume ${agent.sessionId} --model ${agent.model}`;
+  return `${resume} || ${claim}`;
 }
 
-/**
- * Command line that lands the user in `sessionId`: resume it if Claude has a
- * transcript for it, otherwise claim the id for a brand new conversation.
- */
-export async function launchCommand(
-  claudeCommand: string,
-  sessionId: string,
-  model: string,
-): Promise<string> {
-  const flag = (await sessionExists(sessionId))
-    ? `--resume ${sessionId}`
-    : `--session-id ${sessionId}`;
-  return `${claudeCommand} ${flag} --model ${model}`;
+/** Terminal title: what the user asked to see instead of a UUID. */
+export function terminalName(initiative: Initiative, agent: Agent): string {
+  return `${initiative.name}-${agent.role}-${agent.model}`;
 }
