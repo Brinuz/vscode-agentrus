@@ -6,13 +6,10 @@ export interface Agent {
   role: Role;
   /** Model alias passed to `claude --model`, e.g. "fable" or "opus". */
   model: string;
-  /**
-   * UUID we mint ourselves and hand to `claude --session-id`. Claude requires
-   * a UUID here, so this stays internal; the user sees the initiative name.
-   */
-  sessionId: string;
-  /** Whether the id has been claimed, i.e. later launches must `--resume`. */
+  /** Whether the conversation exists, i.e. later launches must `--resume`. */
   started?: boolean;
+  /** Bumped by "start fresh" to name a new conversation. Defaults to 1. */
+  generation?: number;
 }
 
 /** A plain terminal in the initiative's worktree — no Claude attached. */

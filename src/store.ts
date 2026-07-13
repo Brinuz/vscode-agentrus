@@ -9,11 +9,21 @@ export class Store {
   private initiatives: Initiative[];
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    // Initiatives stored before shells and docs existed come back without
-    // them, and the tree would throw on the missing arrays.
-    this.initiatives = context.workspaceState
-      .get<Initiative[]>(KEY, [])
-      .map((i) => ({ ...i, shells: i.shells ?? [], docs: i.docs ?? [] }));
+    this.initiatives = context.workspaceState.get<Initiative[]>(KEY, []).map((i) => ({
+      ...i,
+      // Stored before shells and docs existed: the tree would throw on the
+      // missing arrays.
+      shells: i.shells ?? [],
+      docs: i.docs ?? [],
+      // Agents used to be identified by a minted UUID and their conversations
+      // were created without a title, so there is no name to resume them by.
+      // Start those agents over rather than resuming into an error.
+      agents: i.agents.map((agent) =>
+        "sessionId" in agent
+          ? { role: agent.role, model: agent.model, started: false, generation: 1 }
+          : agent,
+      ),
+    }));
   }
 
   all(): Initiative[] {
@@ -34,8 +44,8 @@ export class Store {
       agents: ROLES.map((role) => ({
         role,
         model: defaultModel(role),
-        sessionId: randomUUID(),
         started: false,
+        generation: 1,
       })),
       shells: [],
       docs: [],
@@ -53,7 +63,7 @@ export class Store {
   async updateAgent(
     initiativeId: string,
     role: Role,
-    change: Partial<Pick<Agent, "model" | "sessionId" | "started">>,
+    change: Partial<Pick<Agent, "model" | "started" | "generation">>,
   ): Promise<void> {
     const agent = this.find(initiativeId)?.agents.find((a) => a.role === role);
     if (!agent) {

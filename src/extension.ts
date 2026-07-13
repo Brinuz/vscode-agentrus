@@ -1,9 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import * as vscode from "vscode";
 import { addWorktree, currentRef, deleteBranch, removeWorktree, repoRoot } from "./git";
 import { agentKey, Initiative, ROLE_ICONS, shellKey } from "./model";
-import { launchCommand, terminalName } from "./sessions";
+import { launchCommand, sessionName } from "./sessions";
 import { Store } from "./store";
 import { Terminals } from "./terminals";
 import { AgentItem, DocItem, GroupItem, InitiativeItem, InitiativeTree, ShellItem } from "./tree";
@@ -45,9 +44,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const started = item.agent.started ?? false;
     const created = terminals.open(item.initiative, {
       key: agentKey(item.agent),
-      name: terminalName(item.initiative, item.agent),
+      name: sessionName(item.initiative, item.agent),
       icon: ROLE_ICONS[item.agent.role],
-      command: launchCommand(claudeCommand, item.agent, started),
+      command: launchCommand(claudeCommand, item.initiative, item.agent, started),
     });
 
     // The id is claimed the moment we launch: from here on, `--session-id`
@@ -128,8 +127,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       terminals.disposeKey(item.initiative, agentKey(item.agent));
+      // A same-named session would just resume the old conversation, so the
+      // new one needs a name of its own.
       await store.updateAgent(item.initiative.id, item.agent.role, {
-        sessionId: randomUUID(),
+        generation: (item.agent.generation ?? 1) + 1,
         started: false,
       });
       tree.refresh();

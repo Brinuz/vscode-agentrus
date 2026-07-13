@@ -2,10 +2,13 @@
 
 A VS Code sidebar for running multiple Claude Code agents across multiple initiatives without losing track of them.
 
-An **initiative** is a unit of work — "Auth revamp", "Billing migration". Each one gets:
+An **initiative** is a unit of work — "Auth revamp", "Billing migration". Each one gets its own **git worktree** on its own branch, so initiatives never touch each other's files, and holds three things:
 
-- its own **git worktree** on its own branch, so initiatives never touch each other's files;
-- three **agents**, each pinned to a model and to a durable Claude session:
+- **Agents** — three Claude sessions, each pinned to a model;
+- **Docs** — markdown and other files that belong to the initiative;
+- **Shells** — plain terminals in the worktree, no Claude attached.
+
+The agents:
 
 | Agent | Default model |
 | --- | --- |
@@ -17,7 +20,9 @@ Clicking an agent opens a terminal in that initiative's worktree and drops you i
 
 ## How it works
 
-Agentrus mints a UUID per agent and hands it to Claude Code as `--session-id`. On later clicks it passes `--resume <uuid>` instead, so the conversation continues rather than restarting. It decides between the two by looking for the session transcript under `~/.claude/projects`, which means deleting a session outside VS Code does the sane thing rather than leaving a broken link.
+Each agent's conversation is named `{initiative}-{agent}` — `Auth revamp-architect`. Agentrus creates it with `claude --name <name>` and gets back into it with `claude --resume <name>`, so the same name you see in the sidebar is the one in the terminal tab, in Claude's prompt box, and in its `/resume` picker.
+
+The name deliberately leaves out the model, so switching an agent from `fable` to `opus` keeps its conversation instead of renaming it out of reach. "Start fresh" bumps a suffix (`Auth revamp-architect-2`), since a same-named session would otherwise just resume the old one.
 
 Git is the source of truth for worktrees. On startup Agentrus reconciles its list against `git worktree list`, so a worktree you removed by hand disappears from the sidebar instead of lingering as a dead entry.
 
