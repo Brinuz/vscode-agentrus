@@ -73,6 +73,11 @@
         "icon": "$(empty-window)"
       },
       {
+        "command": "agentrus.openWorktreeHere",
+        "title": "Agent\"R\"Us: Open Worktree in This Window",
+        "icon": "$(arrow-swap)"
+      },
+      {
         "command": "agentrus.removeInitiative",
         "title": "Agent\"R\"Us: Remove Initiative",
         "icon": "$(trash)"
@@ -142,9 +147,14 @@
           "group": "inline@1"
         },
         {
-          "command": "agentrus.openWorktreeWindow",
+          "command": "agentrus.openWorktreeHere",
           "when": "view == agentrus.initiatives && viewItem == initiative",
           "group": "inline@2"
+        },
+        {
+          "command": "agentrus.openWorktreeWindow",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "0_open"
         },
         {
           "command": "agentrus.removeInitiative",
@@ -208,6 +218,10 @@
         },
         {
           "command": "agentrus.openWorktreeWindow",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.openWorktreeHere",
           "when": "false"
         },
         {
@@ -289,6 +303,16 @@
           "type": "string",
           "default": "",
           "description": "Directory that holds initiative worktrees. Relative paths resolve against the repository root. Defaults to a sibling folder named '<repo>-worktrees'."
+        },
+        "agentrus.copyToWorktree": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".env"
+          ],
+          "description": "Files copied from the repository into each newly created worktree, relative to the repo root — untracked config like .env does not travel with `git worktree add`. Prefix an entry with **/ to copy every file with that name found anywhere in the repo (outside .git and node_modules)."
         },
         "agentrus.branchPrefix": {
           "type": "string",

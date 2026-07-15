@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { realpath } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -25,6 +26,22 @@ async function git(cwd: string, args: string[]): Promise<string> {
 export async function repoRoot(cwd: string): Promise<string | undefined> {
   try {
     return await git(cwd, ["rev-parse", "--show-toplevel"]);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The main repository's root, even when `cwd` is inside a linked worktree.
+ * Initiatives are keyed by this, so every window on the same repo — the main
+ * checkout or any of its worktrees — sees the same list.
+ */
+export async function mainRepoRoot(cwd: string): Promise<string | undefined> {
+  try {
+    // In the main checkout this is ".git"; in a worktree it points at the
+    // main repository's .git directory.
+    const commonDir = await git(cwd, ["rev-parse", "--git-common-dir"]);
+    return await canonical(dirname(resolve(cwd, commonDir)));
   } catch {
     return undefined;
   }

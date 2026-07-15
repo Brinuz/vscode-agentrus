@@ -30,6 +30,8 @@ The name deliberately leaves out the model, so switching an agent from `fable` t
 
 Git is the source of truth for worktrees. On startup Agent"R"Us reconciles its list against `git worktree list`, so a worktree you removed by hand disappears from the sidebar instead of lingering as a dead entry. Initiatives that just use the repo as-is are never pruned this way.
 
+Creating a worktree also copies over the untracked config files listed in `agentrus.copyToWorktree` (by default `.env`), since `git worktree add` only materializes tracked files.
+
 ### Docs
 
 Docs are **not** stored in your repo — there is nothing to commit and nothing to gitignore. They live in the extension's global storage, one folder per initiative, so they also survive the initiative's worktree being deleted.
@@ -59,7 +61,8 @@ Open a folder that is a git repository, then open the Agent"R"Us view in the act
 - **Create initiative** (`+` in the view title) — asks for a name and where it runs: the repo you have open, or a new worktree branched off a ref you choose.
 - **Click an agent** — opens or reveals its terminal, resuming its session.
 - **Open all agents** (on an initiative) — brings up all three at once.
-- **Open worktree in new window** — for when an initiative deserves its own window.
+- **Open worktree in this window** — switches the window to the worktree so the Explorer shows the initiative's real files. The sidebar shows the same initiatives there: they are keyed to the repo, not to the folder you happen to have open. Terminals do not survive the switch, but conversations resume on the next click.
+- **Open worktree in new window** (context menu) — for when an initiative deserves its own window.
 - **Change model** (on an agent) — takes effect the next time that agent's terminal starts.
 - **Change startup skill** (on an agent) — pick from the skills found in `~/.claude/skills/` and the repo's `.claude/skills/`, type a name, or choose "No skill". Same timing as model changes.
 - **Add doc** (on the Docs group) — a new markdown file in the docs folder, or a link to an existing file anywhere on disk.
@@ -77,10 +80,11 @@ Open a folder that is a git repository, then open the Agent"R"Us view in the act
 | `agentrus.skills.dev` | — | Startup skill for new dev agents |
 | `agentrus.skills.reviewer` | — | Startup skill for new reviewer agents |
 | `agentrus.worktreeRoot` | `../<repo>-worktrees` | Where worktrees are created |
+| `agentrus.copyToWorktree` | `[".env"]` | Untracked files copied into each new worktree; `**/name` matches recursively |
 | `agentrus.branchPrefix` | `initiative/` | Prefix for initiative branches |
 | `agentrus.claudeCommand` | `claude` | Command used to launch Claude Code |
 
-The initiative list lives in VS Code's workspace state, so it is local to your machine and to this workspace.
+The initiative list is stored per repository, keyed by the main repo's root — a window on the repo and a window on any of its worktrees see the same initiatives. It stays local to your machine.
 
 ## Development
 

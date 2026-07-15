@@ -4,13 +4,28 @@ import * as vscode from "vscode";
 import { Agent, Doc, Initiative, Role, ROLES, Shell } from "./model";
 import { canonical, listWorktrees } from "./git";
 
-const KEY = "agentrus.initiatives";
+/** Pre-repo-keyed storage: one list per workspace folder. */
+const LEGACY_KEY = "agentrus.initiatives";
 
 export class Store {
   private initiatives: Initiative[];
+  private readonly key: string | undefined;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
-    this.initiatives = context.workspaceState.get<Initiative[]>(KEY, []).map((i) => ({
+  /**
+   * Initiatives are stored in global storage keyed by the main repo root, so
+   * a window on the repo and a window on one of its worktrees see the same
+   * list. Earlier versions kept them in workspaceState; that data is moved
+   * over the first time the repo's window activates.
+   */
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    root: string | undefined,
+  ) {
+    this.key = root === undefined ? undefined : `agentrus.initiatives/${root}`;
+    const stored = this.key ? context.globalState.get<Initiative[]>(this.key) : undefined;
+    const legacy = root ? context.workspaceState.get<Initiative[]>(LEGACY_KEY) : undefined;
+
+    this.initiatives = (stored ?? legacy ?? []).map((i) => ({
       ...i,
       // Stored before shells and docs existed: the tree would throw on the
       // missing arrays.
@@ -31,6 +46,11 @@ export class Store {
           : agent,
       ),
     }));
+
+    if (stored === undefined && legacy !== undefined) {
+      void this.flush();
+      void context.workspaceState.update(LEGACY_KEY, undefined);
+    }
   }
 
   all(): Initiative[] {
@@ -161,7 +181,9 @@ export class Store {
   }
 
   private async flush(): Promise<void> {
-    await this.context.workspaceState.update(KEY, this.initiatives);
+    if (this.key) {
+      await this.context.globalState.update(this.key, this.initiatives);
+    }
   }
 }
 

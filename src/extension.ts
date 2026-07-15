@@ -3,8 +3,9 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import * as vscode from "vscode";
 import { ensureDocsDir, listDocFiles } from "./docs";
-import { addWorktree, currentRef, deleteBranch, removeWorktree, repoRoot } from "./git";
+import { addWorktree, currentRef, deleteBranch, mainRepoRoot, removeWorktree } from "./git";
 import { agentKey, Initiative, ROLE_ICONS, shellKey } from "./model";
+import { seedWorktree } from "./seed";
 import { deleteSessions, launchCommand, sessionExists, sessionName } from "./sessions";
 import { Store } from "./store";
 import { Terminals } from "./terminals";
@@ -14,7 +15,8 @@ import { message, slugify } from "./util";
 const KNOWN_MODELS = ["fable", "opus", "sonnet", "haiku"];
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const store = new Store(context);
+  const root = await findRepoRoot();
+  const store = new Store(context, root);
   const terminals = new Terminals();
   const tree = new InitiativeTree(store, terminals, (initiative) =>
     listDocFiles(context, initiative),
@@ -35,7 +37,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     docsWatcher.onDidDelete(() => tree.refresh()),
   );
 
-  const root = await findRepoRoot();
   await vscode.commands.executeCommand("setContext", "agentrus.hasRepo", root !== undefined);
 
   if (root) {
@@ -113,6 +114,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         "vscode.openFolder",
         vscode.Uri.file(item.initiative.worktreePath),
         { forceNewWindow: true },
+      );
+    }),
+
+    vscode.commands.registerCommand("agentrus.openWorktreeHere", async (item: InitiativeItem) => {
+      // Reloads the window onto the worktree. Terminals do not survive that,
+      // but conversations do: the disk check resumes them on the next click.
+      await vscode.commands.executeCommand(
+        "vscode.openFolder",
+        vscode.Uri.file(item.initiative.worktreePath),
+        { forceNewWindow: false },
       );
     }),
 
@@ -293,7 +304,10 @@ async function findRepoRoot(): Promise<string | undefined> {
   if (!folder || folder.uri.scheme !== "file") {
     return undefined;
   }
-  return repoRoot(folder.uri.fsPath);
+  // The MAIN repo root, even when the window has a worktree open: git
+  // operations, worktree naming and initiative storage all key off it, so a
+  // worktree window behaves exactly like the main one.
+  return mainRepoRoot(folder.uri.fsPath);
 }
 
 async function createInitiative(root: string, store: Store, tree: InitiativeTree): Promise<void> {
@@ -357,6 +371,16 @@ async function createInitiative(root: string, store: Store, tree: InitiativeTree
   } catch (error) {
     vscode.window.showErrorMessage(`Could not create the worktree: ${message(error)}`);
     return;
+  }
+
+  // Untracked config (.env and friends) does not travel with `git worktree
+  // add`; carry over whatever the user listed.
+  const copies = config.get<string[]>("copyToWorktree", []);
+  const failures = await seedWorktree(root, created, copies);
+  if (failures.length > 0) {
+    vscode.window.showWarningMessage(
+      `Worktree created, but some files were not copied — ${failures.join("; ")}`,
+    );
   }
 
   await store.add(name, created, branch, true);
