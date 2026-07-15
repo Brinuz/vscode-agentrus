@@ -57,6 +57,7 @@ export class Store {
       agents: ROLES.map((role) => ({
         role,
         model: defaultModel(role),
+        skill: defaultSkill(role),
         started: false,
         generation: 1,
       })),
@@ -76,7 +77,7 @@ export class Store {
   async updateAgent(
     initiativeId: string,
     role: Role,
-    change: Partial<Pick<Agent, "model" | "started" | "generation">>,
+    change: Partial<Pick<Agent, "model" | "skill" | "started" | "generation">>,
   ): Promise<void> {
     const agent = this.find(initiativeId)?.agents.find((a) => a.role === role);
     if (!agent) {
@@ -167,4 +168,9 @@ export class Store {
 export function defaultModel(role: Role): string {
   const config = vscode.workspace.getConfiguration("agentrus");
   return config.get<string>(`models.${role}`) ?? "sonnet";
+}
+
+export function defaultSkill(role: Role): string | undefined {
+  const config = vscode.workspace.getConfiguration("agentrus");
+  return config.get<string>(`skills.${role}`) || undefined;
 }

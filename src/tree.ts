@@ -63,10 +63,12 @@ export class AgentItem extends vscode.TreeItem {
     running: boolean,
   ) {
     super(agent.role, vscode.TreeItemCollapsibleState.None);
-    this.description = running ? `${agent.model} · live` : agent.model;
+    const skill = agent.skill ? ` · /${agent.skill}` : "";
+    this.description = `${agent.model}${skill}${running ? " · live" : ""}`;
     this.tooltip = new vscode.MarkdownString(
       [
         `**${agent.role}** — \`${agent.model}\``,
+        agent.skill ? `Startup skill: \`/${agent.skill}\`` : "",
         "",
         running
           ? "Terminal is open."
@@ -111,14 +113,18 @@ export class ShellItem extends vscode.TreeItem {
 }
 
 export class DocItem extends vscode.TreeItem {
-  readonly contextValue = "doc";
-
   constructor(
     readonly initiative: Initiative,
     readonly doc: Doc,
+    /** Linked docs are store entries the user can unlink; files found in the
+     * docs folder are not — they would reappear on the next refresh. */
+    linked: boolean,
   ) {
     super(doc.name, vscode.TreeItemCollapsibleState.None);
-    this.description = basename(doc.path);
+    this.contextValue = linked ? "doc" : "doc-file";
+    if (doc.name !== basename(doc.path)) {
+      this.description = basename(doc.path);
+    }
     this.tooltip = doc.path;
     this.resourceUri = vscode.Uri.file(doc.path);
     this.command = {
@@ -138,6 +144,8 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
   constructor(
     private readonly store: Store,
     private readonly terminals: Terminals,
+    /** Files currently in the initiative's docs folder. */
+    private readonly docFiles: (initiative: Initiative) => Promise<Doc[]>,
   ) {}
 
   refresh(): void {
@@ -148,7 +156,7 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
     return element;
   }
 
-  getChildren(element?: Node): Node[] {
+  async getChildren(element?: Node): Promise<Node[]> {
     if (!element) {
       return this.store.all().map((initiative) => new InitiativeItem(initiative));
     }
@@ -157,7 +165,7 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
       const { initiative } = element;
       return [
         new GroupItem(initiative, "agents", initiative.agents.length),
-        new GroupItem(initiative, "docs", initiative.docs.length),
+        new GroupItem(initiative, "docs", (await this.docs(initiative)).length),
         new GroupItem(initiative, "shells", initiative.shells.length),
       ];
     }
@@ -171,7 +179,7 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
               new AgentItem(initiative, agent, this.terminals.isRunning(initiative, agentKey(agent))),
           );
         case "docs":
-          return initiative.docs.map((doc) => new DocItem(initiative, doc));
+          return this.docs(initiative);
         case "shells":
           return initiative.shells.map(
             (shell) =>
@@ -181,5 +189,21 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
     }
 
     return [];
+  }
+
+  /**
+   * Everything in the docs folder shows up by itself; the store only
+   * contributes linked files living elsewhere. A store entry whose file is in
+   * the folder (docs created before folder listing existed) is shadowed by
+   * the folder's own entry rather than shown twice.
+   */
+  private async docs(initiative: Initiative): Promise<DocItem[]> {
+    const files = await this.docFiles(initiative);
+    const filePaths = new Set(files.map((doc) => doc.path));
+    const linked = initiative.docs.filter((doc) => !filePaths.has(doc.path));
+    return [
+      ...files.map((doc) => new DocItem(initiative, doc, false)),
+      ...linked.map((doc) => new DocItem(initiative, doc, true)),
+    ];
   }
 }

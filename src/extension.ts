@@ -1,9 +1,11 @@
+import { readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import * as vscode from "vscode";
-import { ensureDocsDir } from "./docs";
+import { ensureDocsDir, listDocFiles } from "./docs";
 import { addWorktree, currentRef, deleteBranch, removeWorktree, repoRoot } from "./git";
 import { agentKey, Initiative, ROLE_ICONS, shellKey } from "./model";
-import { launchCommand, sessionName } from "./sessions";
+import { deleteSessions, launchCommand, sessionExists, sessionName } from "./sessions";
 import { Store } from "./store";
 import { Terminals } from "./terminals";
 import { AgentItem, DocItem, GroupItem, InitiativeItem, InitiativeTree, ShellItem } from "./tree";
@@ -14,12 +16,23 @@ const KNOWN_MODELS = ["fable", "opus", "sonnet", "haiku"];
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const store = new Store(context);
   const terminals = new Terminals();
-  const tree = new InitiativeTree(store, terminals);
+  const tree = new InitiativeTree(store, terminals, (initiative) =>
+    listDocFiles(context, initiative),
+  );
+
+  // A file landing in any initiative's docs folder — usually written by an
+  // agent — shows up in the tree by itself, without a manual refresh.
+  const docsWatcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(vscode.Uri.joinPath(context.globalStorageUri, "docs"), "**"),
+  );
 
   context.subscriptions.push(
     terminals,
     terminals.onDidChange(() => tree.refresh()),
     vscode.window.createTreeView("agentrus.initiatives", { treeDataProvider: tree }),
+    docsWatcher,
+    docsWatcher.onDidCreate(() => tree.refresh()),
+    docsWatcher.onDidDelete(() => tree.refresh()),
   );
 
   const root = await findRepoRoot();
@@ -33,7 +46,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const requireRoot = async (): Promise<string | undefined> => {
     const current = await findRepoRoot();
     if (!current) {
-      vscode.window.showErrorMessage("Agentrus needs an open folder that is a git repository.");
+      vscode.window.showErrorMessage('Agent"R"Us needs an open folder that is a git repository.');
     }
     return current;
   };
@@ -46,12 +59,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Claude refuses to --add-dir a directory that does not exist yet.
     const docs = await ensureDocsDir(context, item.initiative);
 
+    // Disk is the source of truth for create-vs-resume: resuming a name with
+    // no session behind it opens claude's picker and eats any queued prompt,
+    // so the `started` flag alone (stale after a terminal closed before its
+    // first message) is not enough to decide.
+    const name = sessionName(item.initiative, item.agent);
     const started = item.agent.started ?? false;
+    const resume = (await sessionExists(item.initiative.worktreePath, name)) ?? started;
+
     const created = terminals.open(item.initiative, {
       key: agentKey(item.agent),
-      name: sessionName(item.initiative, item.agent),
+      name,
       icon: ROLE_ICONS[item.agent.role],
-      command: launchCommand(claudeCommand, item.initiative, item.agent, started, docs),
+      command: launchCommand(claudeCommand, item.initiative, item.agent, resume, docs),
     });
 
     // The conversation exists the moment we launch: from here on we resume it.
@@ -117,26 +137,84 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
 
+    vscode.commands.registerCommand("agentrus.changeSkill", async (item: AgentItem) => {
+      const current = item.agent.skill ?? "";
+      const found = await availableSkills(item.initiative.worktreePath);
+      const picked = await vscode.window.showQuickPick(
+        [
+          { label: "$(close) No skill", id: "none" as const },
+          ...found.map((name) => ({
+            label: name,
+            description: name === current ? "current" : undefined,
+            id: "skill" as const,
+          })),
+          { label: "$(edit) Type a name…", id: "custom" as const },
+        ],
+        {
+          title: `Startup skill for ${item.agent.role} — ${item.initiative.name}`,
+          placeHolder:
+            "Sent as the first message every time this agent's terminal starts, with the docs directory as its argument.",
+        },
+      );
+      if (!picked) {
+        return;
+      }
+
+      let skill: string;
+      if (picked.id === "none") {
+        skill = "";
+      } else if (picked.id === "custom") {
+        const entered = await vscode.window.showInputBox({
+          title: `Startup skill for ${item.agent.role} — ${item.initiative.name}`,
+          value: current,
+          placeHolder: "my-architect-skill",
+        });
+        if (entered === undefined) {
+          return;
+        }
+        skill = entered.trim().replace(/^\/+/, "");
+      } else {
+        skill = picked.label;
+      }
+      if (skill === current) {
+        return;
+      }
+      await store.updateAgent(item.initiative.id, item.agent.role, {
+        skill: skill || undefined,
+      });
+      tree.refresh();
+
+      if (terminals.isRunning(item.initiative, agentKey(item.agent))) {
+        vscode.window.showInformationMessage(
+          `${item.agent.role} will ${skill ? `load /${skill}` : "load no skill"} next time its terminal starts. Close the running terminal to switch now.`,
+        );
+      }
+    }),
+
     vscode.commands.registerCommand("agentrus.resetSession", async (item: AgentItem) => {
       const confirmed = await vscode.window.showWarningMessage(
         `Start a fresh session for ${item.agent.role} on "${item.initiative.name}"?`,
         {
           modal: true,
           detail:
-            "This agent will point at a brand new conversation. The existing one is left alone, but Agentrus will no longer link to it.",
+            "The current conversation's transcript is deleted from disk; the next launch starts a brand new conversation under the same name.",
         },
-        "Start fresh",
+        "Delete and start fresh",
       );
-      if (confirmed !== "Start fresh") {
+      if (confirmed !== "Delete and start fresh") {
         return;
       }
       terminals.disposeKey(item.initiative, agentKey(item.agent));
-      // A same-named session would just resume the old conversation, so the
-      // new one needs a name of its own.
-      await store.updateAgent(item.initiative.id, item.agent.role, {
-        generation: (item.agent.generation ?? 1) + 1,
-        started: false,
-      });
+      // Give a just-killed claude a beat to finish writing before its
+      // transcript is deleted, so a dying flush cannot resurrect the session.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        await deleteSessions(item.initiative.worktreePath, sessionName(item.initiative, item.agent));
+      } catch (error) {
+        vscode.window.showErrorMessage(`Could not delete the conversation: ${message(error)}`);
+        return;
+      }
+      await store.updateAgent(item.initiative.id, item.agent.role, { started: false });
       tree.refresh();
     }),
 
@@ -337,7 +415,8 @@ async function addDoc(
     await vscode.workspace.fs.writeFile(uri, Buffer.from(`# ${name}\n`, "utf8"));
   }
 
-  await store.addDoc(initiative.id, name, uri.fsPath);
+  // No store entry: it lives in the docs folder, so the tree lists it by
+  // itself. Only linked files outside the folder need remembering.
   tree.refresh();
   await vscode.commands.executeCommand("vscode.open", uri);
 }
@@ -416,6 +495,34 @@ async function removeInitiative(
 
   await store.remove(initiative.id);
   tree.refresh();
+}
+
+/**
+ * Skills claude can actually invoke here: the user's own and the repo's.
+ * Plugin-provided skills are not enumerated; those can still be typed in.
+ */
+async function availableSkills(worktreePath: string): Promise<string[]> {
+  const names = new Set<string>();
+  for (const dir of [
+    join(homedir(), ".claude", "skills"),
+    join(worktreePath, ".claude", "skills"),
+  ]) {
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      try {
+        await stat(join(dir, entry, "SKILL.md"));
+        names.add(entry);
+      } catch {
+        // Not a skill folder.
+      }
+    }
+  }
+  return [...names].sort();
 }
 
 function worktreeRoot(root: string, configured: string): string {

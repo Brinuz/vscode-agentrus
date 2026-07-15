@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import * as vscode from "vscode";
-import { Initiative } from "./model";
+import { Doc, Initiative } from "./model";
 import { slugify } from "./util";
 
 /**
@@ -24,4 +24,27 @@ export async function ensureDocsDir(
   const dir = docsDir(context, initiative);
   await mkdir(dir, { recursive: true });
   return dir;
+}
+
+/**
+ * Every file currently in the initiative's docs folder. The folder IS the
+ * source of truth: anything that lands there — created by the user or written
+ * by an agent — shows up in the tree without being registered anywhere.
+ */
+export async function listDocFiles(
+  context: vscode.ExtensionContext,
+  initiative: Initiative,
+): Promise<Doc[]> {
+  const dir = docsDir(context, initiative);
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+  } catch {
+    // Not created yet: no agent has launched and no doc has been added.
+    return [];
+  }
+  return entries
+    .filter(([name, type]) => type === vscode.FileType.File && !name.startsWith("."))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name]) => ({ id: `file:${name}`, name, path: join(dir, name) }));
 }

@@ -1,6 +1,6 @@
 {
   "name": "agentrus",
-  "displayName": "Agentrus",
+  "displayName": "Agent\"R\"Us",
   "description": "Organize Claude Code work into initiatives, each with its own git worktree and a pinned set of agents.",
   "version": "0.0.1",
   "publisher": "bmonteiro",
@@ -21,7 +21,7 @@
       "activitybar": [
         {
           "id": "agentrus",
-          "title": "Agentrus",
+          "title": "Agent\"R\"Us",
           "icon": "resources/agentrus.svg"
         }
       ]
@@ -43,77 +43,82 @@
       },
       {
         "view": "agentrus.initiatives",
-        "contents": "Agentrus needs an open folder that is a git repository.\n[Open folder](command:vscode.openFolder)",
+        "contents": "Agent\"R\"Us needs an open folder that is a git repository.\n[Open folder](command:vscode.openFolder)",
         "when": "!agentrus.hasRepo"
       }
     ],
     "commands": [
       {
         "command": "agentrus.createInitiative",
-        "title": "Agentrus: Create Initiative",
+        "title": "Agent\"R\"Us: Create Initiative",
         "icon": "$(add)"
       },
       {
         "command": "agentrus.refresh",
-        "title": "Agentrus: Refresh",
+        "title": "Agent\"R\"Us: Refresh",
         "icon": "$(refresh)"
       },
       {
         "command": "agentrus.openAgent",
-        "title": "Agentrus: Open Agent Session"
+        "title": "Agent\"R\"Us: Open Agent Session"
       },
       {
         "command": "agentrus.openAllAgents",
-        "title": "Agentrus: Open All Agents",
+        "title": "Agent\"R\"Us: Open All Agents",
         "icon": "$(run-all)"
       },
       {
         "command": "agentrus.openWorktreeWindow",
-        "title": "Agentrus: Open Worktree in New Window",
+        "title": "Agent\"R\"Us: Open Worktree in New Window",
         "icon": "$(empty-window)"
       },
       {
         "command": "agentrus.removeInitiative",
-        "title": "Agentrus: Remove Initiative",
+        "title": "Agent\"R\"Us: Remove Initiative",
         "icon": "$(trash)"
       },
       {
         "command": "agentrus.changeModel",
-        "title": "Agentrus: Change Agent Model",
+        "title": "Agent\"R\"Us: Change Agent Model",
         "icon": "$(settings-gear)"
       },
       {
         "command": "agentrus.resetSession",
-        "title": "Agentrus: Start Fresh Session",
+        "title": "Agent\"R\"Us: Start Fresh Session",
         "icon": "$(debug-restart)"
       },
       {
+        "command": "agentrus.changeSkill",
+        "title": "Agent\"R\"Us: Change Startup Skill",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "agentrus.newShell",
-        "title": "Agentrus: New Shell",
+        "title": "Agent\"R\"Us: New Shell",
         "icon": "$(add)"
       },
       {
         "command": "agentrus.openShell",
-        "title": "Agentrus: Open Shell"
+        "title": "Agent\"R\"Us: Open Shell"
       },
       {
         "command": "agentrus.removeShell",
-        "title": "Agentrus: Remove Shell",
+        "title": "Agent\"R\"Us: Remove Shell",
         "icon": "$(trash)"
       },
       {
         "command": "agentrus.addDoc",
-        "title": "Agentrus: Add Doc",
+        "title": "Agent\"R\"Us: Add Doc",
         "icon": "$(add)"
       },
       {
         "command": "agentrus.removeDoc",
-        "title": "Agentrus: Remove Doc from Initiative",
+        "title": "Agent\"R\"Us: Remove Doc from Initiative",
         "icon": "$(close)"
       },
       {
         "command": "agentrus.revealDocsFolder",
-        "title": "Agentrus: Reveal Docs Folder",
+        "title": "Agent\"R\"Us: Reveal Docs Folder",
         "icon": "$(folder-opened)"
       }
     ],
@@ -172,6 +177,11 @@
           "group": "inline@1"
         },
         {
+          "command": "agentrus.changeSkill",
+          "when": "view == agentrus.initiatives && viewItem == agent",
+          "group": "1_modify"
+        },
+        {
           "command": "agentrus.resetSession",
           "when": "view == agentrus.initiatives && viewItem == agent",
           "group": "1_modify"
@@ -213,6 +223,10 @@
           "when": "false"
         },
         {
+          "command": "agentrus.changeSkill",
+          "when": "false"
+        },
+        {
           "command": "agentrus.newShell",
           "when": "false"
         },
@@ -239,7 +253,7 @@
       ]
     },
     "configuration": {
-      "title": "Agentrus",
+      "title": "Agent\"R\"Us",
       "properties": {
         "agentrus.models.architect": {
           "type": "string",
@@ -255,6 +269,21 @@
           "type": "string",
           "default": "fable",
           "description": "Model alias used for new reviewer agents."
+        },
+        "agentrus.skills.architect": {
+          "type": "string",
+          "default": "",
+          "description": "Skill new architect agents invoke as the first message of every launch (the initiative's docs directory is passed as its argument). Empty for none."
+        },
+        "agentrus.skills.dev": {
+          "type": "string",
+          "default": "",
+          "description": "Skill new dev agents invoke as the first message of every launch (the initiative's docs directory is passed as its argument). Empty for none."
+        },
+        "agentrus.skills.reviewer": {
+          "type": "string",
+          "default": "",
+          "description": "Skill new reviewer agents invoke as the first message of every launch (the initiative's docs directory is passed as its argument). Empty for none."
         },
         "agentrus.worktreeRoot": {
           "type": "string",

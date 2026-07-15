@@ -6,9 +6,17 @@ export interface Agent {
   role: Role;
   /** Model alias passed to `claude --model`, e.g. "fable" or "opus". */
   model: string;
+  /**
+   * Skill invoked as the first message of every launch, e.g. "architect".
+   * The initiative's docs directory is appended as its argument.
+   */
+  skill?: string;
   /** Whether the conversation exists, i.e. later launches must `--resume`. */
   started?: boolean;
-  /** Bumped by "start fresh" to name a new conversation. Defaults to 1. */
+  /**
+   * Legacy suffix from when "start fresh" renamed the session instead of
+   * deleting it. Kept so conversations named that way still resolve.
+   */
   generation?: number;
 }
 
