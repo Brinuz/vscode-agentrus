@@ -5,6 +5,11 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/** Names and paths carry spaces, so they have to survive the shell. */
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export function message(error: unknown): string {
   if (error && typeof error === "object" && "stderr" in error) {
     const stderr = String((error as { stderr: unknown }).stderr).trim();

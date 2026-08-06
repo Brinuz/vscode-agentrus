@@ -1,16 +1,34 @@
 import { basename } from "node:path";
 import * as vscode from "vscode";
-import { Agent, agentKey, Doc, Initiative, ROLE_ICONS, Shell, shellKey } from "./model";
+import { Agent, agentIcon, agentKey, Doc, Initiative, Shell, shellKey } from "./model";
+import { Activity, ActivityMonitor } from "./status";
 import { Store } from "./store";
 import { Terminals } from "./terminals";
 
 export type GroupKind = "agents" | "docs" | "shells";
 
+/** Identifies an initiative row being dragged within our own tree. */
+const MIME = "application/vnd.code.tree.agentrus.initiatives";
+
 export class InitiativeItem extends vscode.TreeItem {
   readonly contextValue = "initiative";
 
-  constructor(readonly initiative: Initiative) {
-    super(initiative.name, vscode.TreeItemCollapsibleState.Expanded);
+  constructor(
+    readonly initiative: Initiative,
+    /** The initiative this window is actually open on, if any. */
+    current = false,
+  ) {
+    super(
+      initiative.name,
+      // Everything starts collapsed; only the one you have open is worth
+      // unfolding on sight.
+      current
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed,
+    );
+    // Stable identity, so VS Code tracks expansion per initiative rather than
+    // per label, and so `reveal` can find the row again.
+    this.id = initiative.id;
     const managed = initiative.managed ?? true;
     this.description = initiative.branch ?? basename(initiative.worktreePath);
     this.tooltip = new vscode.MarkdownString(
@@ -20,6 +38,7 @@ export class InitiativeItem extends vscode.TreeItem {
         initiative.branch ? `Branch: \`${initiative.branch}\`` : "",
         `${managed ? "Worktree" : "Directory"}: \`${initiative.worktreePath}\``,
         managed ? "" : "\nUses the repo as-is — no worktree of its own.",
+        current ? "\nOpen in this window." : "",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -36,6 +55,7 @@ export class GroupItem extends vscode.TreeItem {
     count: number,
   ) {
     super(LABELS[kind], vscode.TreeItemCollapsibleState.Expanded);
+    this.id = `${initiative.id}:${kind}`;
     this.contextValue = `group:${kind}`;
     this.description = String(count);
     this.iconPath = new vscode.ThemeIcon(GROUP_ICONS[kind]);
@@ -55,37 +75,106 @@ const GROUP_ICONS: Record<GroupKind, string> = {
 };
 
 export class AgentItem extends vscode.TreeItem {
-  readonly contextValue = "agent";
-
   constructor(
     readonly initiative: Initiative,
     readonly agent: Agent,
     running: boolean,
+    /** What the transcript says the agent is doing, when it is running. */
+    activity?: Activity,
   ) {
     super(agent.role, vscode.TreeItemCollapsibleState.None);
+    // Only agents the user added may be removed; the defaults stay put.
+    this.contextValue = agent.custom ? "agent-custom" : "agent";
     const skill = agent.skill ? ` · /${agent.skill}` : "";
-    this.description = `${agent.model}${skill}${running ? " · live" : ""}`;
+    this.description = `${agent.model}${skill}${state(running, activity)}`;
     this.tooltip = new vscode.MarkdownString(
       [
         `**${agent.role}** — \`${agent.model}\``,
         agent.skill ? `Startup skill: \`/${agent.skill}\`` : "",
         "",
         running
-          ? "Terminal is open."
+          ? runningTooltip(activity)
           : agent.started
             ? "Click to reopen; the conversation resumes where it left off."
             : "Click to start this agent's conversation.",
       ].join("\n"),
     );
     this.iconPath = new vscode.ThemeIcon(
-      ROLE_ICONS[agent.role],
-      running ? new vscode.ThemeColor("charts.green") : undefined,
+      running ? icon(agent, activity) : agentIcon(agent),
+      running ? new vscode.ThemeColor(color(activity)) : undefined,
     );
     this.command = {
       command: "agentrus.openAgent",
       title: "Open Agent Session",
       arguments: [this],
     };
+  }
+}
+
+function state(running: boolean, activity?: Activity): string {
+  if (!running) {
+    return "";
+  }
+  switch (activity) {
+    case "working":
+      return " · working…";
+    case "needs-you":
+      return " · needs you";
+    case "idle":
+      return " · idle";
+    default:
+      // Without a verdict there is nothing to say beyond "the terminal is
+      // there", which is what "live" has always meant.
+      return " · live";
+  }
+}
+
+/**
+ * Traffic lights: green is clear to take, yellow is busy, red is stopped and
+ * waiting on you.
+ *
+ * The yellow is the terminal's rather than `charts.yellow`, which is a
+ * desaturated gold too close to its warmer neighbours to tell apart at icon
+ * size — the one thing this colouring exists for.
+ */
+function color(activity?: Activity): string {
+  switch (activity) {
+    case "working":
+      return "terminal.ansiYellow";
+    case "needs-you":
+      return "charts.red";
+    default:
+      return "charts.green";
+  }
+}
+
+/**
+ * `~spin` is the only animation a tree row can have, so it is spent on being
+ * busy: the rows in motion are the ones to leave alone, which leaves the
+ * still, orange bell as the thing your eye lands on. An agent keeps its own
+ * icon whenever it is neither working nor blocked.
+ */
+function icon(agent: Agent, activity?: Activity): string {
+  switch (activity) {
+    case "working":
+      return "loading~spin";
+    case "needs-you":
+      return "bell";
+    default:
+      return agentIcon(agent);
+  }
+}
+
+function runningTooltip(activity?: Activity): string {
+  switch (activity) {
+    case "working":
+      return "Mid-turn — working on something.";
+    case "needs-you":
+      return "Waiting for you — it asked for permission or input.";
+    case "idle":
+      return "Finished; nothing pending.";
+    default:
+      return "Terminal is open.";
   }
 }
 
@@ -137,15 +226,27 @@ export class DocItem extends vscode.TreeItem {
 
 type Node = InitiativeItem | GroupItem | AgentItem | ShellItem | DocItem;
 
-export class InitiativeTree implements vscode.TreeDataProvider<Node> {
+export class InitiativeTree
+  implements vscode.TreeDataProvider<Node>, vscode.TreeDragAndDropController<Node>
+{
   private readonly changed = new vscode.EventEmitter<Node | undefined>();
   readonly onDidChangeTreeData = this.changed.event;
+
+  readonly dropMimeTypes = [MIME];
+  readonly dragMimeTypes = [MIME];
 
   constructor(
     private readonly store: Store,
     private readonly terminals: Terminals,
     /** Files currently in the initiative's docs folder. */
     private readonly docFiles: (initiative: Initiative) => Promise<Doc[]>,
+    private readonly activity: ActivityMonitor,
+    /**
+     * Id of the initiative this window is open on. Resolved outside the tree —
+     * matching a worktree means canonicalizing paths, which cannot happen
+     * inside a synchronous `getTreeItem`.
+     */
+    private readonly currentId: () => string | undefined,
   ) {}
 
   refresh(): void {
@@ -156,9 +257,24 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
     return element;
   }
 
+  /** Required for `reveal`, which is how the open initiative gets expanded. */
+  getParent(element: Node): Node | undefined {
+    if (element instanceof InitiativeItem) {
+      return undefined;
+    }
+    if (element instanceof GroupItem) {
+      return new InitiativeItem(element.initiative, this.isCurrent(element.initiative));
+    }
+    const kind: GroupKind =
+      element instanceof AgentItem ? "agents" : element instanceof ShellItem ? "shells" : "docs";
+    return new GroupItem(element.initiative, kind, 0);
+  }
+
   async getChildren(element?: Node): Promise<Node[]> {
     if (!element) {
-      return this.store.all().map((initiative) => new InitiativeItem(initiative));
+      return this.store
+        .all()
+        .map((initiative) => new InitiativeItem(initiative, this.isCurrent(initiative)));
     }
 
     if (element instanceof InitiativeItem) {
@@ -176,7 +292,12 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
         case "agents":
           return initiative.agents.map(
             (agent) =>
-              new AgentItem(initiative, agent, this.terminals.isRunning(initiative, agentKey(agent))),
+              new AgentItem(
+                initiative,
+                agent,
+                this.terminals.isRunning(initiative, agentKey(agent)),
+                this.activity.get(initiative, agent),
+              ),
           );
         case "docs":
           return this.docs(initiative);
@@ -189,6 +310,31 @@ export class InitiativeTree implements vscode.TreeDataProvider<Node> {
     }
 
     return [];
+  }
+
+  handleDrag(source: readonly Node[], data: vscode.DataTransfer): void {
+    const dragged = source.filter((node): node is InitiativeItem => node instanceof InitiativeItem);
+    if (dragged.length === 0) {
+      return;
+    }
+    data.set(MIME, new vscode.DataTransferItem(dragged[0].initiative.id));
+  }
+
+  async handleDrop(target: Node | undefined, data: vscode.DataTransfer): Promise<void> {
+    const dragged = data.get(MIME)?.value;
+    if (typeof dragged !== "string") {
+      return;
+    }
+    // Dropping anywhere inside an initiative means "put it here" — the user
+    // should not have to hit the initiative row exactly.
+    const onto = target?.initiative.id;
+    if (await this.store.reorderInitiative(dragged, onto)) {
+      this.refresh();
+    }
+  }
+
+  private isCurrent(initiative: Initiative): boolean {
+    return this.currentId() === initiative.id;
   }
 
   /**

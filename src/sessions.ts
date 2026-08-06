@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { canonical } from "./git";
 import { Agent, Initiative } from "./model";
+import { shellQuote as quote } from "./util";
 
 /**
  * The session's identity and its label, both at once: passed as `--name` when
@@ -25,6 +26,11 @@ export function sessionName(initiative: Initiative, agent: Agent): string {
  *
  * `docsDir` sits outside the working tree, so it is granted explicitly with
  * --add-dir; without it the agent could not read the initiative's docs.
+ *
+ * `settingsPath` carries this agent's status hooks. It rides on resumes too,
+ * so conversations started before hooks existed pick them up on their next
+ * launch. Claude merges hook layers rather than replacing them, so the user's
+ * own hooks keep firing alongside ours.
  */
 export function launchCommand(
   claudeCommand: string,
@@ -32,9 +38,10 @@ export function launchCommand(
   agent: Agent,
   resume: boolean,
   docsDir: string,
+  settingsPath: string,
 ): string {
   const name = quote(sessionName(initiative, agent));
-  const flags = `--model ${agent.model} --add-dir ${quote(docsDir)}`;
+  const flags = `--model ${agent.model} --settings ${quote(settingsPath)} --add-dir ${quote(docsDir)}`;
   // The startup skill goes to resumes too, not just the first launch: it
   // re-briefs the agent after compaction may have eroded the original
   // instructions. The docs directory rides along as the skill's argument,
@@ -55,11 +62,6 @@ export function launchCommand(
   return `${claudeCommand} --resume ${name} ${flags}${prompt} || ${create}`;
 }
 
-/** Names and paths carry spaces, so they have to survive the shell. */
-function quote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 /**
  * Transcripts on disk whose session carries this name. Claude stores them
  * under a folder derived from the session's cwd (every non-alphanumeric
@@ -69,7 +71,7 @@ function quote(value: string): string {
  * Returns undefined when the project folder exists but cannot be read. A
  * missing folder means no session ever ran there.
  */
-async function namedTranscripts(
+export async function namedTranscripts(
   worktreePath: string,
   name: string,
 ): Promise<string[] | undefined> {

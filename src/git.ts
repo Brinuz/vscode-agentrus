@@ -69,18 +69,67 @@ export async function branchExists(root: string, branch: string): Promise<boolea
   }
 }
 
-/** Creates the worktree and returns the canonical path git will report for it. */
+export interface Branch {
+  name: string;
+  /** Worktree that already has it checked out, if any — git refuses a second. */
+  worktree?: string;
+}
+
+/**
+ * Local branches, with the worktree holding each one. Git allows a branch in
+ * only one worktree at a time, so the caller needs to know which are taken.
+ */
+export async function listBranches(root: string): Promise<Branch[]> {
+  const out = await git(root, [
+    "for-each-ref",
+    "--sort=-committerdate",
+    "--format=%(refname:short)%09%(worktreepath)",
+    "refs/heads",
+  ]);
+  return out
+    .split("\n")
+    .filter((line) => line.trim())
+    .map((line) => {
+      const [name, worktree] = line.split("\t");
+      return { name, worktree: worktree || undefined };
+    });
+}
+
+/** Remote-tracking branches, minus the symbolic `<remote>/HEAD` entries. */
+export async function listRemoteBranches(root: string): Promise<string[]> {
+  const out = await git(root, [
+    "for-each-ref",
+    "--sort=-committerdate",
+    "--format=%(refname:short)",
+    "refs/remotes",
+  ]);
+  return out
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((name) => name && !name.endsWith("/HEAD"));
+}
+
+/**
+ * Creates the worktree and returns the canonical path git will report for it.
+ *
+ * `track` is for starting from a branch that only exists on a remote: it makes
+ * a local branch following `baseRef`. Otherwise an existing local branch is
+ * checked out as-is and `baseRef` is only used to cut a new one.
+ */
 export async function addWorktree(
   root: string,
   path: string,
   branch: string,
   baseRef: string,
+  track = false,
 ): Promise<string> {
   const exists = await branchExists(root, branch);
   // Reuse the branch if it is already there; only create it when it is not.
-  const args = exists
-    ? ["worktree", "add", path, branch]
-    : ["worktree", "add", "-b", branch, path, baseRef];
+  const args = track
+    ? ["worktree", "add", "--track", "-b", branch, path, baseRef]
+    : exists
+      ? ["worktree", "add", path, branch]
+      : ["worktree", "add", "-b", branch, path, baseRef];
   await git(root, args);
   return canonical(path);
 }

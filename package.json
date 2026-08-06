@@ -2,7 +2,7 @@
   "name": "agentrus",
   "displayName": "Agent\"R\"Us",
   "description": "Organize Claude Code work into initiatives, each with its own git worktree and a pinned set of agents.",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "publisher": "bmonteiro",
   "private": true,
   "license": "MIT",
@@ -38,7 +38,7 @@
     "viewsWelcome": [
       {
         "view": "agentrus.initiatives",
-        "contents": "No initiatives yet.\n\nAn initiative is a git worktree on its own branch, with an architect, a dev and a reviewer agent pinned to it.\n[Create initiative](command:agentrus.createInitiative)",
+        "contents": "No initiatives yet.\n\nAn initiative is a git worktree on its own branch, with an architect, a dev, a reviewer and a generic agent pinned to it.\n[Create initiative](command:agentrus.createInitiative)",
         "when": "agentrus.hasRepo"
       },
       {
@@ -84,8 +84,47 @@
       },
       {
         "command": "agentrus.changeModel",
-        "title": "Agent\"R\"Us: Change Agent Model",
+        "title": "Agent\"R\"Us: Change Agent Model"
+      },
+      {
+        "command": "agentrus.configureInitiative",
+        "title": "Agent\"R\"Us: Configure Initiative",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "agentrus.configureAgent",
+        "title": "Agent\"R\"Us: Configure Agent",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "agentrus.configureShell",
+        "title": "Agent\"R\"Us: Configure Shell",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "agentrus.addAgent",
+        "title": "Agent\"R\"Us: Add Agent",
+        "icon": "$(person-add)"
+      },
+      {
+        "command": "agentrus.removeAgent",
+        "title": "Agent\"R\"Us: Remove Agent",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentrus.moveInitiativeUp",
+        "title": "Agent\"R\"Us: Move Initiative Up",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "agentrus.moveInitiativeDown",
+        "title": "Agent\"R\"Us: Move Initiative Down",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "agentrus.openSettings",
+        "title": "Agent\"R\"Us: Open Settings",
+        "icon": "$(gear)"
       },
       {
         "command": "agentrus.resetSession",
@@ -107,6 +146,16 @@
         "title": "Agent\"R\"Us: Open Shell"
       },
       {
+        "command": "agentrus.renameShell",
+        "title": "Agent\"R\"Us: Rename Shell",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "agentrus.addDefaultShells",
+        "title": "Agent\"R\"Us: Add Default Shells",
+        "icon": "$(list-unordered)"
+      },
+      {
         "command": "agentrus.removeShell",
         "title": "Agent\"R\"Us: Remove Shell",
         "icon": "$(trash)"
@@ -125,6 +174,16 @@
         "command": "agentrus.revealDocsFolder",
         "title": "Agent\"R\"Us: Reveal Docs Folder",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "agentrus.revealDoc",
+        "title": "Agent\"R\"Us: Reveal Doc in Finder",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "agentrus.deleteDocFile",
+        "title": "Agent\"R\"Us: Delete Doc File",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -147,24 +206,84 @@
           "group": "inline@1"
         },
         {
-          "command": "agentrus.openWorktreeHere",
+          "command": "agentrus.configureInitiative",
           "when": "view == agentrus.initiatives && viewItem == initiative",
           "group": "inline@2"
         },
         {
+          "command": "agentrus.openAllAgents",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "0_open@1"
+        },
+        {
+          "command": "agentrus.openWorktreeHere",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "0_open@2"
+        },
+        {
           "command": "agentrus.openWorktreeWindow",
           "when": "view == agentrus.initiatives && viewItem == initiative",
-          "group": "0_open"
+          "group": "0_open@3"
+        },
+        {
+          "command": "agentrus.addAgent",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "1_add@1"
+        },
+        {
+          "command": "agentrus.newShell",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "1_add@2"
+        },
+        {
+          "command": "agentrus.addDoc",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "1_add@3"
+        },
+        {
+          "command": "agentrus.revealDocsFolder",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "1_add@4"
+        },
+        {
+          "command": "agentrus.moveInitiativeUp",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "2_order@1"
+        },
+        {
+          "command": "agentrus.moveInitiativeDown",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "2_order@2"
         },
         {
           "command": "agentrus.removeInitiative",
           "when": "view == agentrus.initiatives && viewItem == initiative",
-          "group": "1_modify"
+          "group": "3_modify@1"
+        },
+        {
+          "command": "agentrus.openSettings",
+          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "group": "4_settings@1"
         },
         {
           "command": "agentrus.openAllAgents",
           "when": "view == agentrus.initiatives && viewItem == group:agents",
           "group": "inline@1"
+        },
+        {
+          "command": "agentrus.addAgent",
+          "when": "view == agentrus.initiatives && viewItem == group:agents",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentrus.openAllAgents",
+          "when": "view == agentrus.initiatives && viewItem == group:agents",
+          "group": "0_open@1"
+        },
+        {
+          "command": "agentrus.addAgent",
+          "when": "view == agentrus.initiatives && viewItem == group:agents",
+          "group": "1_add@1"
         },
         {
           "command": "agentrus.addDoc",
@@ -177,34 +296,89 @@
           "group": "inline@2"
         },
         {
+          "command": "agentrus.addDoc",
+          "when": "view == agentrus.initiatives && viewItem == group:docs",
+          "group": "1_add@1"
+        },
+        {
+          "command": "agentrus.revealDocsFolder",
+          "when": "view == agentrus.initiatives && viewItem == group:docs",
+          "group": "1_add@2"
+        },
+        {
           "command": "agentrus.newShell",
           "when": "view == agentrus.initiatives && viewItem == group:shells",
           "group": "inline@1"
         },
         {
-          "command": "agentrus.changeModel",
-          "when": "view == agentrus.initiatives && viewItem == agent",
+          "command": "agentrus.newShell",
+          "when": "view == agentrus.initiatives && viewItem == group:shells",
+          "group": "1_add@1"
+        },
+        {
+          "command": "agentrus.addDefaultShells",
+          "when": "view == agentrus.initiatives && viewItem == group:shells",
+          "group": "1_add@2"
+        },
+        {
+          "command": "agentrus.configureAgent",
+          "when": "view == agentrus.initiatives && viewItem =~ /^agent/",
           "group": "inline@1"
         },
         {
+          "command": "agentrus.changeModel",
+          "when": "view == agentrus.initiatives && viewItem =~ /^agent/",
+          "group": "1_modify@1"
+        },
+        {
           "command": "agentrus.changeSkill",
-          "when": "view == agentrus.initiatives && viewItem == agent",
-          "group": "1_modify"
+          "when": "view == agentrus.initiatives && viewItem =~ /^agent/",
+          "group": "1_modify@2"
         },
         {
           "command": "agentrus.resetSession",
-          "when": "view == agentrus.initiatives && viewItem == agent",
-          "group": "1_modify"
+          "when": "view == agentrus.initiatives && viewItem =~ /^agent/",
+          "group": "1_modify@3"
+        },
+        {
+          "command": "agentrus.removeAgent",
+          "when": "view == agentrus.initiatives && viewItem == agent-custom",
+          "group": "2_remove@1"
+        },
+        {
+          "command": "agentrus.configureShell",
+          "when": "view == agentrus.initiatives && viewItem == shell",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentrus.renameShell",
+          "when": "view == agentrus.initiatives && viewItem == shell",
+          "group": "1_modify@1"
         },
         {
           "command": "agentrus.removeShell",
           "when": "view == agentrus.initiatives && viewItem == shell",
-          "group": "inline@1"
+          "group": "2_remove@1"
         },
         {
           "command": "agentrus.removeDoc",
           "when": "view == agentrus.initiatives && viewItem == doc",
           "group": "inline@1"
+        },
+        {
+          "command": "agentrus.revealDoc",
+          "when": "view == agentrus.initiatives && viewItem == doc",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "agentrus.revealDoc",
+          "when": "view == agentrus.initiatives && viewItem == doc-file",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "agentrus.deleteDocFile",
+          "when": "view == agentrus.initiatives && viewItem == doc-file",
+          "group": "2_remove@1"
         }
       ],
       "commandPalette": [
@@ -263,6 +437,50 @@
         {
           "command": "agentrus.revealDocsFolder",
           "when": "false"
+        },
+        {
+          "command": "agentrus.configureInitiative",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.configureAgent",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.configureShell",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.addAgent",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.removeAgent",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.renameShell",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.addDefaultShells",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.moveInitiativeUp",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.moveInitiativeDown",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.revealDoc",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.deleteDocFile",
+          "when": "false"
         }
       ]
     },
@@ -284,6 +502,11 @@
           "default": "fable",
           "description": "Model alias used for new reviewer agents."
         },
+        "agentrus.models.generic": {
+          "type": "string",
+          "default": "sonnet",
+          "description": "Model alias used for new generic agents — the little helper for questions and odd jobs."
+        },
         "agentrus.skills.architect": {
           "type": "string",
           "default": "",
@@ -298,6 +521,38 @@
           "type": "string",
           "default": "",
           "description": "Skill new reviewer agents invoke as the first message of every launch (the initiative's docs directory is passed as its argument). Empty for none."
+        },
+        "agentrus.skills.generic": {
+          "type": "string",
+          "default": "",
+          "description": "Skill new generic agents invoke as the first message of every launch (the initiative's docs directory is passed as its argument). Empty for none."
+        },
+        "agentrus.defaultShells": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Shells every new initiative starts with, e.g. [\"dev\", \"logs\"]. They are listed in the tree but not opened until clicked. Use \"Add Default Shells\" on an existing initiative's Shells group to backfill."
+        },
+        "agentrus.terminalLocation": {
+          "type": "string",
+          "enum": [
+            "panel",
+            "editor"
+          ],
+          "enumDescriptions": [
+            "Open terminals in the panel, alongside the other terminals.",
+            "Open terminals as editor tabs, so they can be split and arranged like files."
+          ],
+          "default": "panel",
+          "description": "Where Agent\"R\"Us opens terminals for agents and shells. Takes effect on the next terminal."
+        },
+        "agentrus.activityPollSeconds": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "description": "How often to check the transcript of an open agent that has no hook state, to tell working from idle. 0 disables the fallback; hook-backed agents keep reporting either way."
         },
         "agentrus.worktreeRoot": {
           "type": "string",

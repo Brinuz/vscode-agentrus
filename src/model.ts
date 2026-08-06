@@ -1,6 +1,13 @@
-export const ROLES = ["architect", "dev", "reviewer"] as const;
+/** Agents minted for every new initiative, in tree order. */
+export const DEFAULT_AGENTS = ["architect", "dev", "reviewer", "generic"] as const;
 
-export type Role = (typeof ROLES)[number];
+/**
+ * An agent's name, unique within its initiative. Not a closed set: initiatives
+ * can carry extra agents the user named. It stays the agent's identity — the
+ * terminal key and the Claude session name both derive from it — so renaming
+ * one would orphan its conversation, and adding one must check for collisions.
+ */
+export type Role = string;
 
 export interface Agent {
   role: Role;
@@ -11,6 +18,11 @@ export interface Agent {
    * The initiative's docs directory is appended as its argument.
    */
   skill?: string;
+  /**
+   * Whether the user has been asked which skill this agent should load. Set
+   * even when they answered "none", so the launch prompt asks exactly once.
+   */
+  skillChosen?: boolean;
   /** Whether the conversation exists, i.e. later launches must `--resume`. */
   started?: boolean;
   /**
@@ -18,6 +30,10 @@ export interface Agent {
    * deleting it. Kept so conversations named that way still resolve.
    */
   generation?: number;
+  /** Set on agents the user added by hand — only those may be removed. */
+  custom?: boolean;
+  /** Codicon for a custom agent; the defaults have their own icons. */
+  icon?: string;
 }
 
 /** A plain terminal in the initiative's worktree — no Claude attached. */
@@ -54,11 +70,29 @@ export interface Initiative {
   createdAt: number;
 }
 
-export const ROLE_ICONS: Record<Role, string> = {
+const DEFAULT_ICONS: Record<string, string> = {
   architect: "compass",
   dev: "tools",
   reviewer: "search",
+  generic: "comment-discussion",
 };
+
+/** Icons offered when naming a custom agent. */
+export const AGENT_ICONS = [
+  "person",
+  "comment-discussion",
+  "beaker",
+  "bug",
+  "book",
+  "rocket",
+  "shield",
+  "graph",
+];
+
+/** An explicitly chosen icon wins: only the defaults fall back to the map. */
+export function agentIcon(agent: Agent): string {
+  return agent.icon ?? DEFAULT_ICONS[agent.role] ?? "person";
+}
 
 /** Terminal key, unique within an initiative. */
 export function agentKey(agent: Agent): string {
