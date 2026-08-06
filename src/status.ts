@@ -178,10 +178,13 @@ function hookActivity(status: HookStatus): Activity | undefined {
   switch (status.event) {
     case "UserPromptSubmit":
       return "working";
-    // A tool that just finished means the turn is moving again — including
-    // straight after a permission prompt was approved, which is the only sign
-    // that the agent stopped waiting on you.
+    // Any tool activity means the turn is moving — including straight after a
+    // permission prompt was approved, which is the only sign that the agent
+    // stopped waiting on you. All three are needed: a refused tool fires only
+    // the first, and a failing one fires the third in place of the second.
+    case "PreToolUse":
     case "PostToolUse":
+    case "PostToolUseFailure":
       return "working";
     case "Stop":
       return "idle";

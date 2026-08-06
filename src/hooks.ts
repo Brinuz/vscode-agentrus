@@ -9,22 +9,27 @@ import { shellQuote, slugify } from "./util";
  * transcript implies. Claude fires these on its way through a turn, so the
  * state arrives as an event instead of being inferred a few seconds late.
  *
- * `PostToolUse` is the one that runs per tool call rather than once a turn,
- * and it earns that cost: approving a permission prompt fires nothing, so
- * without it a blocked agent would keep claiming to need you for the whole
- * rest of the turn. A finished tool call is the only evidence that the block
- * cleared.
+ * The three tool events run per tool call rather than once a turn, and they
+ * earn that cost: approving a permission prompt fires nothing at all, so tool
+ * activity is the only evidence that the block cleared. All three are wired
+ * because none of them alone covers every tool call — a refused tool fires
+ * only `PreToolUse`, and a failing one fires `PostToolUseFailure` *instead of*
+ * `PostToolUse`, not alongside it.
  */
 export type HookEvent =
   | "UserPromptSubmit"
+  | "PreToolUse"
   | "PostToolUse"
+  | "PostToolUseFailure"
   | "Notification"
   | "Stop"
   | "SessionEnd";
 
 const EVENTS: HookEvent[] = [
   "UserPromptSubmit",
+  "PreToolUse",
   "PostToolUse",
+  "PostToolUseFailure",
   "Notification",
   "Stop",
   "SessionEnd",
@@ -108,7 +113,9 @@ function hookSettings(status: string): unknown {
   return {
     hooks: {
       UserPromptSubmit: entry(record("UserPromptSubmit", status)),
+      PreToolUse: entry(record("PreToolUse", status)),
       PostToolUse: entry(record("PostToolUse", status)),
+      PostToolUseFailure: entry(record("PostToolUseFailure", status)),
       Notification: entry(record("Notification", status)),
       Stop: entry(record("Stop", status)),
       // A finished conversation should leave nothing behind claiming it is
