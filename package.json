@@ -2,7 +2,7 @@
   "name": "agentrus",
   "displayName": "Agent\"R\"Us",
   "description": "Organize Claude Code work into initiatives, each with its own git worktree and a pinned set of agents.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "bmonteiro",
   "private": true,
   "license": "MIT",

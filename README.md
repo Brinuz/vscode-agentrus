@@ -25,7 +25,7 @@ Initiatives created before `generic` existed still have three agents — no migr
 
 Clicking an agent opens a terminal in that initiative's worktree and drops you into that agent's conversation — the same one as last time, with its own history. Close the terminal, come back tomorrow, click again: you land back where you left off.
 
-Initiatives start **collapsed**, except the one whose worktree this window has open. Drag them to reorder, or use **Move up** / **Move down**.
+Initiatives start **collapsed**, except the one whose worktree this window has open — that one is also marked `· this window` on its row, so it stays identifiable once everything is expanded or collapsed again. Drag them to reorder, or use **Move up** / **Move down**.
 
 While an agent's terminal is open, its row says whether it is **working…**, **needs you**, or **idle** — reported by the agent's own process via hooks, so a permission prompt shows up as soon as it appears. See [Working, needs you, or idle](#working-needs-you-or-idle).
 

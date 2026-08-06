@@ -30,7 +30,11 @@ export class InitiativeItem extends vscode.TreeItem {
     // per label, and so `reveal` can find the row again.
     this.id = initiative.id;
     const managed = initiative.managed ?? true;
-    this.description = initiative.branch ?? basename(initiative.worktreePath);
+    // Marked in text rather than colour: colour already means working, needs
+    // you and idle on the agent rows below, and a fourth meaning would blunt
+    // all three.
+    const where = initiative.branch ?? basename(initiative.worktreePath);
+    this.description = current ? `${where} · this window` : where;
     this.tooltip = new vscode.MarkdownString(
       [
         `**${initiative.name}**`,
