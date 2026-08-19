@@ -25,21 +25,21 @@ import {
   agentIcon,
   agentKey,
   DEFAULT_AGENTS,
+  Doc,
   Initiative,
+  Shell,
   shellKey,
 } from "./model";
 import { seedWorktree } from "./seed";
 import { deleteSessions, launchCommand, sessionExists, sessionName } from "./sessions";
+import { Payload } from "./snapshot";
 import { ActivityMonitor } from "./status";
 import { defaultModel, defaultShells, defaultSkill, Store } from "./store";
 import { Terminals } from "./terminals";
-import { AgentItem, DocItem, InitiativeItem, InitiativeTree, ShellItem } from "./tree";
 import { message, slugify } from "./util";
+import { InitiativesViewProvider } from "./view";
 
 const KNOWN_MODELS = ["fable", "opus", "sonnet", "haiku"];
-
-/** Anything in the tree that belongs to an initiative. */
-type OwnedItem = { initiative: Initiative };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const root = await findRepoRoot();
@@ -68,22 +68,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   await resolveCurrent();
 
-  const tree = new InitiativeTree(
+  const view = new InitiativesViewProvider(
+    context.extensionUri,
     store,
     terminals,
     (initiative) => listDocFiles(context, initiative),
     activity,
     () => currentId,
+    root !== undefined,
   );
 
-  const view = vscode.window.createTreeView("agentrus.initiatives", {
-    treeDataProvider: tree,
-    dragAndDropController: tree,
-    showCollapseAll: true,
-  });
-
   // A file landing in any initiative's docs folder — usually written by an
-  // agent — shows up in the tree by itself, without a manual refresh.
+  // agent — shows up in the view by itself, without a manual refresh.
   const docsWatcher = vscode.workspace.createFileSystemWatcher(
     new vscode.RelativePattern(vscode.Uri.joinPath(context.globalStorageUri, "docs"), "**"),
   );
@@ -94,18 +90,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminals.onDidChange(() => {
       // Terminals coming and going is also what starts and stops polling.
       activity.sync();
-      tree.refresh();
+      view.refresh();
     }),
-    activity.onDidChange(() => tree.refresh()),
+    activity.onDidChange(() => view.refresh()),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("agentrus.activityPollSeconds")) {
         activity.sync();
       }
     }),
-    view,
+    vscode.window.registerWebviewViewProvider("agentrus.initiatives", view),
     docsWatcher,
-    docsWatcher.onDidCreate(() => tree.refresh()),
-    docsWatcher.onDidDelete(() => tree.refresh()),
+    docsWatcher.onDidCreate(() => view.refresh()),
+    docsWatcher.onDidDelete(() => view.refresh()),
   );
 
   await vscode.commands.executeCommand("setContext", "agentrus.hasRepo", root !== undefined);
@@ -113,57 +109,68 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (root) {
     await store.reconcile(root);
     await resolveCurrent();
-    tree.refresh();
+    view.refresh();
   }
 
-  // Quiet by default: everything collapsed except the initiative this window
-  // is open on. The explicit collapseAll is load-bearing — VS Code remembers
-  // per-item expansion and would otherwise re-expand rows in defiance of the
-  // Collapsed state the provider asks for.
-  const collapseToCurrent = async (): Promise<void> => {
-    try {
-      await vscode.commands.executeCommand(
-        "workbench.actions.treeView.agentrus.initiatives.collapseAll",
-      );
-    } catch {
-      // Command id is generated from the view; fall back to the item state.
+  /**
+   * A payload naming something that is gone is ignored — the webview can be a
+   * snapshot behind — and the caller pushes a fresh snapshot instead.
+   */
+  const initiativeOf = (payload: Payload): Initiative | undefined => {
+    const initiative = store.find(payload.initiativeId);
+    if (!initiative) {
+      view.refresh();
     }
-    const target = currentId ? store.find(currentId) : undefined;
-    if (!target) {
-      return;
-    }
-    try {
-      await view.reveal(new InitiativeItem(target, true), {
-        expand: true,
-        select: false,
-        focus: false,
-      });
-    } catch {
-      // reveal throws while the view is hidden; the Expanded state covers it.
-    }
+    return initiative;
   };
 
-  // Activation can beat the view's first render, and neither collapseAll nor
-  // reveal does anything before then — so do it whenever the view first shows,
-  // whichever comes first. Once only: after that the tree is the user's.
-  let settled = false;
-  const settle = async (): Promise<void> => {
-    if (settled) {
-      return;
+  const agentOf = (payload: Payload): { initiative: Initiative; agent: Agent } | undefined => {
+    const initiative = initiativeOf(payload);
+    if (!initiative) {
+      return undefined;
     }
-    settled = true;
-    await collapseToCurrent();
+    const agent = initiative.agents.find((a) => a.role === payload.role);
+    if (!agent) {
+      view.refresh();
+      return undefined;
+    }
+    return { initiative, agent };
   };
-  context.subscriptions.push(
-    view.onDidChangeVisibility((event) => {
-      if (event.visible) {
-        void settle();
-      }
-    }),
-  );
-  if (view.visible) {
-    void settle();
-  }
+
+  const shellOf = (payload: Payload): { initiative: Initiative; shell: Shell } | undefined => {
+    const initiative = initiativeOf(payload);
+    if (!initiative) {
+      return undefined;
+    }
+    const shell = initiative.shells.find((s) => s.id === payload.shellId);
+    if (!shell) {
+      view.refresh();
+      return undefined;
+    }
+    return { initiative, shell };
+  };
+
+  /**
+   * Docs are resolved by path against the same two sources the snapshot uses:
+   * the docs folder first, then the initiative's linked files.
+   */
+  const docOf = async (
+    payload: Payload,
+  ): Promise<{ initiative: Initiative; doc: Doc } | undefined> => {
+    const initiative = initiativeOf(payload);
+    if (!initiative) {
+      return undefined;
+    }
+    const files = await listDocFiles(context, initiative);
+    const doc =
+      files.find((d) => d.path === payload.docPath) ??
+      initiative.docs.find((d) => d.path === payload.docPath);
+    if (!doc) {
+      view.refresh();
+      return undefined;
+    }
+    return { initiative, doc };
+  };
 
   const requireRoot = async (): Promise<string | undefined> => {
     const current = await findRepoRoot();
@@ -174,72 +181,71 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   /** False when the user dismissed the skill prompt, i.e. nothing was opened. */
-  const openAgent = async (item: AgentItem): Promise<boolean> => {
+  const openAgent = async (initiative: Initiative, chosen: Agent): Promise<boolean> => {
     const claudeCommand = vscode.workspace
       .getConfiguration("agentrus")
       .get<string>("claudeCommand", "claude");
 
     // Claude refuses to --add-dir a directory that does not exist yet.
-    const docs = await ensureDocsDir(context, item.initiative);
+    const docs = await ensureDocsDir(context, initiative);
 
     // Rewritten on every launch, so an agent whose conversation predates the
     // status hooks starts reporting as soon as it is next opened.
-    const settings = await ensureHookSettings(context, item.initiative, item.agent);
+    const settings = await ensureHookSettings(context, initiative, chosen);
 
     // An agent with no skill gets asked once, on its first launch — including
     // when the answer is "none", so it is never asked twice.
-    if (!item.agent.skill && !item.agent.skillChosen) {
+    if (!chosen.skill && !chosen.skillChosen) {
       const skill = await pickSkill(
-        item.initiative.worktreePath,
-        item.agent.skill ?? "",
-        `Startup skill for ${item.agent.role} — ${item.initiative.name}`,
+        initiative.worktreePath,
+        chosen.skill ?? "",
+        `Startup skill for ${chosen.role} — ${initiative.name}`,
       );
       if (skill === undefined) {
         return false;
       }
-      await store.updateAgent(item.initiative.id, item.agent.role, {
+      await store.updateAgent(initiative.id, chosen.role, {
         skill: skill || undefined,
         skillChosen: true,
       });
-      tree.refresh();
+      view.refresh();
     }
 
-    // updateAgent mutates the stored agent in place, and the tree item holds
-    // that same object — but read it back rather than rely on that.
-    const agent =
-      store.find(item.initiative.id)?.agents.find((a) => a.role === item.agent.role) ?? item.agent;
+    // updateAgent mutates the stored agent in place, and the caller holds that
+    // same object — but read it back rather than rely on that.
+    const agent = store.find(initiative.id)?.agents.find((a) => a.role === chosen.role) ?? chosen;
 
     // Disk is the source of truth for create-vs-resume: resuming a name with
     // no session behind it opens claude's picker and eats any queued prompt,
     // so the `started` flag alone (stale after a terminal closed before its
     // first message) is not enough to decide.
-    const name = sessionName(item.initiative, agent);
+    const name = sessionName(initiative, agent);
     const started = agent.started ?? false;
-    const resume = (await sessionExists(item.initiative.worktreePath, name)) ?? started;
+    const resume = (await sessionExists(initiative.worktreePath, name)) ?? started;
 
-    const created = terminals.open(item.initiative, {
+    const created = terminals.open(initiative, {
       key: agentKey(agent),
       name,
       icon: agentIcon(agent),
-      command: launchCommand(claudeCommand, item.initiative, agent, resume, docs, settings),
+      command: launchCommand(claudeCommand, initiative, agent, resume, docs, settings),
     });
 
     // The conversation exists the moment we launch: from here on we resume it.
     if (created && !started) {
-      await store.updateAgent(item.initiative.id, agent.role, { started: true });
-      tree.refresh();
+      await store.updateAgent(initiative.id, agent.role, { started: true });
+      view.refresh();
     }
     return true;
   };
 
-  /** Runs one of a hub's rows with the same item the hub was opened on. */
-  const hub = async (title: string, item: unknown, rows: HubRow[]): Promise<void> => {
+  /** Runs one of a hub's rows on whatever the hub was opened on. */
+  const hub = async (title: string, payload: Payload, rows: HubRow[]): Promise<void> => {
     const picked = await vscode.window.showQuickPick(rows, {
       title,
       placeHolder: "Everything here is also on the right-click menu.",
     });
     if (picked) {
-      await vscode.commands.executeCommand(picked.command, item);
+      await vscode.commands.executeCommand(picked.command, payload);
     }
   };
 
@@ -250,47 +256,62 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await store.reconcile(current);
       }
       await resolveCurrent();
-      tree.refresh();
+      view.refresh();
     }),
 
     vscode.commands.registerCommand("agentrus.createInitiative", async () => {
       const current = await requireRoot();
       if (current) {
-        await createInitiative(current, store, tree);
+        await createInitiative(current, store, view);
         await resolveCurrent();
-        tree.refresh();
+        view.refresh();
       }
     }),
 
-    vscode.commands.registerCommand("agentrus.openAgent", openAgent),
+    vscode.commands.registerCommand("agentrus.openAgent", async (payload: Payload) => {
+      const found = agentOf(payload);
+      if (found) {
+        await openAgent(found.initiative, found.agent);
+      }
+    }),
 
-    vscode.commands.registerCommand("agentrus.openAllAgents", async (item: OwnedItem) => {
-      for (const agent of item.initiative.agents) {
+    vscode.commands.registerCommand("agentrus.openAllAgents", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (!initiative) {
+        return;
+      }
+      for (const agent of initiative.agents) {
         // Dismissing an agent's skill prompt stops the whole batch. Skipping to
         // the next one instead would mean pressing Esc once per agent, and
         // still ending up with terminals for the ones already past.
-        if (!(await openAgent(new AgentItem(item.initiative, agent, false)))) {
+        if (!(await openAgent(initiative, agent))) {
           return;
         }
       }
     }),
 
-    vscode.commands.registerCommand("agentrus.openWorktreeWindow", async (item: OwnedItem) => {
-      await vscode.commands.executeCommand(
-        "vscode.openFolder",
-        vscode.Uri.file(item.initiative.worktreePath),
-        { forceNewWindow: true },
-      );
+    vscode.commands.registerCommand("agentrus.openWorktreeWindow", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (initiative) {
+        await vscode.commands.executeCommand(
+          "vscode.openFolder",
+          vscode.Uri.file(initiative.worktreePath),
+          { forceNewWindow: true },
+        );
+      }
     }),
 
-    vscode.commands.registerCommand("agentrus.openWorktreeHere", async (item: OwnedItem) => {
-      // Reloads the window onto the worktree. Terminals do not survive that,
-      // but conversations do: the disk check resumes them on the next click.
-      await vscode.commands.executeCommand(
-        "vscode.openFolder",
-        vscode.Uri.file(item.initiative.worktreePath),
-        { forceNewWindow: false },
-      );
+    vscode.commands.registerCommand("agentrus.openWorktreeHere", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (initiative) {
+        // Reloads the window onto the worktree. Terminals do not survive that,
+        // but conversations do: the disk check resumes them on the next click.
+        await vscode.commands.executeCommand(
+          "vscode.openFolder",
+          vscode.Uri.file(initiative.worktreePath),
+          { forceNewWindow: false },
+        );
+      }
     }),
 
     vscode.commands.registerCommand("agentrus.openSettings", async () => {
@@ -299,8 +320,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Cog on an initiative. Every row is also a right-click entry, so the two
     // paths never disagree about what is available.
-    vscode.commands.registerCommand("agentrus.configureInitiative", async (item: InitiativeItem) => {
-      await hub(item.initiative.name, item, [
+    vscode.commands.registerCommand("agentrus.configureInitiative", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (!initiative) {
+        return;
+      }
+      await hub(initiative.name, payload, [
         { label: "$(run-all) Open all agents", command: "agentrus.openAllAgents" },
         { label: "$(person-add) Add agent", command: "agentrus.addAgent" },
         { label: "$(add) New shell", command: "agentrus.newShell" },
@@ -308,7 +333,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { label: "$(folder-opened) Reveal docs folder", command: "agentrus.revealDocsFolder" },
         {
           label: "$(arrow-swap) Open worktree in this window",
-          description: item.initiative.worktreePath,
+          description: initiative.worktreePath,
           command: "agentrus.openWorktreeHere",
         },
         {
@@ -322,105 +347,132 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       ]);
     }),
 
-    vscode.commands.registerCommand("agentrus.configureAgent", async (item: AgentItem) => {
-      await hub(`${item.agent.role} — ${item.initiative.name}`, item, [
+    vscode.commands.registerCommand("agentrus.configureAgent", async (payload: Payload) => {
+      const found = agentOf(payload);
+      if (!found) {
+        return;
+      }
+      const { initiative, agent } = found;
+      await hub(`${agent.role} — ${initiative.name}`, payload, [
         {
           label: "$(settings-gear) Model",
-          description: item.agent.model,
+          description: agent.model,
           command: "agentrus.changeModel",
         },
         {
           label: "$(sparkle) Startup skill",
-          description: item.agent.skill ? `/${item.agent.skill}` : "none",
+          description: agent.skill ? `/${agent.skill}` : "none",
           command: "agentrus.changeSkill",
         },
         { label: "$(debug-restart) Start fresh session", command: "agentrus.resetSession" },
-        ...(item.agent.custom
+        ...(agent.custom
           ? [{ label: "$(trash) Remove agent", command: "agentrus.removeAgent" }]
           : []),
       ]);
     }),
 
-    vscode.commands.registerCommand("agentrus.configureShell", async (item: ShellItem) => {
-      await hub(`${item.shell.name} — ${item.initiative.name}`, item, [
+    vscode.commands.registerCommand("agentrus.configureShell", async (payload: Payload) => {
+      const found = shellOf(payload);
+      if (!found) {
+        return;
+      }
+      await hub(`${found.shell.name} — ${found.initiative.name}`, payload, [
         { label: "$(edit) Rename shell", command: "agentrus.renameShell" },
         { label: "$(trash) Remove shell", command: "agentrus.removeShell" },
       ]);
     }),
 
-    vscode.commands.registerCommand("agentrus.moveInitiativeUp", async (item: InitiativeItem) => {
-      if (await store.moveInitiative(item.initiative.id, -1)) {
-        tree.refresh();
+    vscode.commands.registerCommand("agentrus.moveInitiativeUp", async (payload: Payload) => {
+      if (await store.moveInitiative(payload.initiativeId, -1)) {
+        view.refresh();
       }
     }),
 
-    vscode.commands.registerCommand("agentrus.moveInitiativeDown", async (item: InitiativeItem) => {
-      if (await store.moveInitiative(item.initiative.id, 1)) {
-        tree.refresh();
+    vscode.commands.registerCommand("agentrus.moveInitiativeDown", async (payload: Payload) => {
+      if (await store.moveInitiative(payload.initiativeId, 1)) {
+        view.refresh();
       }
     }),
 
-    vscode.commands.registerCommand("agentrus.changeModel", async (item: AgentItem) => {
+    vscode.commands.registerCommand("agentrus.changeModel", async (payload: Payload) => {
+      const found = agentOf(payload);
+      if (!found) {
+        return;
+      }
+      const { initiative, agent } = found;
       const picked = await vscode.window.showQuickPick(
         KNOWN_MODELS.map((model) => ({
           label: model,
-          description: model === item.agent.model ? "current" : undefined,
+          description: model === agent.model ? "current" : undefined,
         })),
-        { title: `Model for ${item.agent.role} — ${item.initiative.name}` },
+        { title: `Model for ${agent.role} — ${initiative.name}` },
       );
-      if (!picked || picked.label === item.agent.model) {
+      if (!picked || picked.label === agent.model) {
         return;
       }
-      await store.updateAgent(item.initiative.id, item.agent.role, { model: picked.label });
-      tree.refresh();
+      await store.updateAgent(initiative.id, agent.role, { model: picked.label });
+      view.refresh();
 
-      if (terminals.isRunning(item.initiative, agentKey(item.agent))) {
+      if (terminals.isRunning(initiative, agentKey(agent))) {
         vscode.window.showInformationMessage(
-          `${item.agent.role} will use ${picked.label} next time its terminal starts. Close the running terminal to switch now.`,
+          `${agent.role} will use ${picked.label} next time its terminal starts. Close the running terminal to switch now.`,
         );
       }
     }),
 
-    vscode.commands.registerCommand("agentrus.changeSkill", async (item: AgentItem) => {
-      const current = item.agent.skill ?? "";
+    vscode.commands.registerCommand("agentrus.changeSkill", async (payload: Payload) => {
+      const found = agentOf(payload);
+      if (!found) {
+        return;
+      }
+      const { initiative, agent } = found;
+      const current = agent.skill ?? "";
       const skill = await pickSkill(
-        item.initiative.worktreePath,
+        initiative.worktreePath,
         current,
-        `Startup skill for ${item.agent.role} — ${item.initiative.name}`,
+        `Startup skill for ${agent.role} — ${initiative.name}`,
       );
       if (skill === undefined) {
         return;
       }
       // Recorded even when unchanged, so the launch prompt stops asking.
-      await store.updateAgent(item.initiative.id, item.agent.role, {
+      await store.updateAgent(initiative.id, agent.role, {
         skill: skill || undefined,
         skillChosen: true,
       });
       if (skill === current) {
         return;
       }
-      tree.refresh();
+      view.refresh();
 
-      if (terminals.isRunning(item.initiative, agentKey(item.agent))) {
+      if (terminals.isRunning(initiative, agentKey(agent))) {
         vscode.window.showInformationMessage(
-          `${item.agent.role} will ${skill ? `load /${skill}` : "load no skill"} next time its terminal starts. Close the running terminal to switch now.`,
+          `${agent.role} will ${skill ? `load /${skill}` : "load no skill"} next time its terminal starts. Close the running terminal to switch now.`,
         );
       }
     }),
 
-    vscode.commands.registerCommand("agentrus.addAgent", async (item: OwnedItem) => {
-      await addAgent(item.initiative, store, tree);
+    vscode.commands.registerCommand("agentrus.addAgent", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (initiative) {
+        await addAgent(initiative, store, view);
+      }
     }),
 
-    vscode.commands.registerCommand("agentrus.removeAgent", async (item: AgentItem) => {
-      if (!item.agent.custom) {
+    vscode.commands.registerCommand("agentrus.removeAgent", async (payload: Payload) => {
+      const found = agentOf(payload);
+      if (!found) {
+        return;
+      }
+      const { initiative, agent } = found;
+      if (!agent.custom) {
         vscode.window.showInformationMessage(
-          `${item.agent.role} is one of the default agents and cannot be removed.`,
+          `${agent.role} is one of the default agents and cannot be removed.`,
         );
         return;
       }
       const confirmed = await vscode.window.showWarningMessage(
-        `Remove the ${item.agent.role} agent from "${item.initiative.name}"?`,
+        `Remove the ${agent.role} agent from "${initiative.name}"?`,
         {
           modal: true,
           detail:
@@ -431,15 +483,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (confirmed !== "Remove") {
         return;
       }
-      terminals.disposeKey(item.initiative, agentKey(item.agent));
-      await removeHookFiles(context, item.initiative, item.agent);
-      await store.removeAgent(item.initiative.id, item.agent.role);
-      tree.refresh();
+      terminals.disposeKey(initiative, agentKey(agent));
+      await removeHookFiles(context, initiative, agent);
+      await store.removeAgent(initiative.id, agent.role);
+      view.refresh();
     }),
 
-    vscode.commands.registerCommand("agentrus.resetSession", async (item: AgentItem) => {
+    vscode.commands.registerCommand("agentrus.resetSession", async (payload: Payload) => {
+      const found = agentOf(payload);
+      if (!found) {
+        return;
+      }
+      const { initiative, agent } = found;
       const confirmed = await vscode.window.showWarningMessage(
-        `Start a fresh session for ${item.agent.role} on "${item.initiative.name}"?`,
+        `Start a fresh session for ${agent.role} on "${initiative.name}"?`,
         {
           modal: true,
           detail:
@@ -450,42 +507,50 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (confirmed !== "Delete and start fresh") {
         return;
       }
-      terminals.disposeKey(item.initiative, agentKey(item.agent));
+      terminals.disposeKey(initiative, agentKey(agent));
       // Give a just-killed claude a beat to finish writing before its
       // transcript is deleted, so a dying flush cannot resurrect the session.
       await new Promise((resolve) => setTimeout(resolve, 500));
       try {
-        await deleteSessions(item.initiative.worktreePath, sessionName(item.initiative, item.agent));
+        await deleteSessions(initiative.worktreePath, sessionName(initiative, agent));
       } catch (error) {
         vscode.window.showErrorMessage(`Could not delete the conversation: ${message(error)}`);
         return;
       }
-      await store.updateAgent(item.initiative.id, item.agent.role, { started: false });
-      tree.refresh();
+      await store.updateAgent(initiative.id, agent.role, { started: false });
+      view.refresh();
     }),
 
-    vscode.commands.registerCommand("agentrus.newShell", async (item: OwnedItem) => {
+    vscode.commands.registerCommand("agentrus.newShell", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (!initiative) {
+        return;
+      }
       const name = await vscode.window.showInputBox({
-        title: `New shell — ${item.initiative.name}`,
+        title: `New shell — ${initiative.name}`,
         prompt: "A plain terminal in this initiative's directory.",
-        value: nextShellName(item.initiative),
+        value: nextShellName(initiative),
       });
       if (!name) {
         return;
       }
-      const shell = await store.addShell(item.initiative.id, name);
+      const shell = await store.addShell(initiative.id, name);
       if (!shell) {
         return;
       }
-      tree.refresh();
-      terminals.open(item.initiative, {
+      view.refresh();
+      terminals.open(initiative, {
         key: shellKey(shell),
-        name: `${item.initiative.name}-${shell.name}`,
+        name: `${initiative.name}-${shell.name}`,
         icon: "terminal",
       });
     }),
 
-    vscode.commands.registerCommand("agentrus.addDefaultShells", async (item: OwnedItem) => {
+    vscode.commands.registerCommand("agentrus.addDefaultShells", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (!initiative) {
+        return;
+      }
       const wanted = defaultShells();
       if (wanted.length === 0) {
         vscode.window.showInformationMessage(
@@ -494,73 +559,103 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       const missing = wanted.filter(
-        (name) => !item.initiative.shells.some((shell) => shell.name === name),
+        (name) => !initiative.shells.some((shell) => shell.name === name),
       );
       for (const name of missing) {
-        await store.addShell(item.initiative.id, name);
+        await store.addShell(initiative.id, name);
       }
-      tree.refresh();
+      view.refresh();
       vscode.window.showInformationMessage(
         missing.length > 0
-          ? `Added ${missing.join(", ")} to "${item.initiative.name}".`
-          : `"${item.initiative.name}" already has every default shell.`,
+          ? `Added ${missing.join(", ")} to "${initiative.name}".`
+          : `"${initiative.name}" already has every default shell.`,
       );
     }),
 
-    vscode.commands.registerCommand("agentrus.openShell", (item: ShellItem) => {
-      terminals.open(item.initiative, {
-        key: shellKey(item.shell),
-        name: `${item.initiative.name}-${item.shell.name}`,
-        icon: "terminal",
-      });
+    vscode.commands.registerCommand("agentrus.openShell", (payload: Payload) => {
+      const found = shellOf(payload);
+      if (found) {
+        terminals.open(found.initiative, {
+          key: shellKey(found.shell),
+          name: `${found.initiative.name}-${found.shell.name}`,
+          icon: "terminal",
+        });
+      }
     }),
 
-    vscode.commands.registerCommand("agentrus.renameShell", async (item: ShellItem) => {
-      const name = await vscode.window.showInputBox({
-        title: `Rename shell — ${item.initiative.name}`,
-        value: item.shell.name,
-        validateInput: (value) => (value.trim() ? undefined : "Give the shell a name."),
-      });
-      if (!name || name.trim() === item.shell.name) {
+    vscode.commands.registerCommand("agentrus.renameShell", async (payload: Payload) => {
+      const found = shellOf(payload);
+      if (!found) {
         return;
       }
-      await store.renameShell(item.initiative.id, item.shell.id, name.trim());
-      tree.refresh();
-      await terminals.rename(
-        item.initiative,
-        shellKey(item.shell),
-        `${item.initiative.name}-${name.trim()}`,
-      );
+      const { initiative, shell } = found;
+      const name = await vscode.window.showInputBox({
+        title: `Rename shell — ${initiative.name}`,
+        value: shell.name,
+        validateInput: (value) => (value.trim() ? undefined : "Give the shell a name."),
+      });
+      if (!name || name.trim() === shell.name) {
+        return;
+      }
+      await store.renameShell(initiative.id, shell.id, name.trim());
+      view.refresh();
+      await terminals.rename(initiative, shellKey(shell), `${initiative.name}-${name.trim()}`);
     }),
 
-    vscode.commands.registerCommand("agentrus.removeShell", async (item: ShellItem) => {
-      terminals.disposeKey(item.initiative, shellKey(item.shell));
-      await store.removeShell(item.initiative.id, item.shell.id);
-      tree.refresh();
+    vscode.commands.registerCommand("agentrus.removeShell", async (payload: Payload) => {
+      const found = shellOf(payload);
+      if (!found) {
+        return;
+      }
+      terminals.disposeKey(found.initiative, shellKey(found.shell));
+      await store.removeShell(found.initiative.id, found.shell.id);
+      view.refresh();
     }),
 
-    vscode.commands.registerCommand("agentrus.addDoc", async (item: OwnedItem) => {
-      await addDoc(context, item.initiative, store, tree);
+    vscode.commands.registerCommand("agentrus.addDoc", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (initiative) {
+        await addDoc(context, initiative, store, view);
+      }
     }),
 
-    vscode.commands.registerCommand("agentrus.revealDocsFolder", async (item: OwnedItem) => {
-      const dir = await ensureDocsDir(context, item.initiative);
-      await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
+    vscode.commands.registerCommand("agentrus.revealDocsFolder", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      if (initiative) {
+        const dir = await ensureDocsDir(context, initiative);
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
+      }
     }),
 
-    vscode.commands.registerCommand("agentrus.revealDoc", async (item: DocItem) => {
-      await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(item.doc.path));
+    // A card cannot hand vscode.open a Uri, so opening a doc goes through here.
+    vscode.commands.registerCommand("agentrus.openDoc", async (payload: Payload) => {
+      const found = await docOf(payload);
+      if (found) {
+        await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(found.doc.path));
+      }
+    }),
+
+    vscode.commands.registerCommand("agentrus.revealDoc", async (payload: Payload) => {
+      const found = await docOf(payload);
+      if (found) {
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(found.doc.path));
+      }
     }),
 
     // For docs living in the docs folder there is nothing to unlink — the
     // folder is the source of truth — so the only way to be rid of one is to
     // delete the file. Behind a modal, since it is a real delete.
-    vscode.commands.registerCommand("agentrus.deleteDocFile", async (item: DocItem) => {
+    vscode.commands.registerCommand("agentrus.deleteDocFile", async (payload: Payload) => {
+      const found = await docOf(payload);
+      if (!found) {
+        return;
+      }
+      const { doc } = found;
       const confirmed = await vscode.window.showWarningMessage(
-        `Delete "${item.doc.name}"?`,
+        `Delete "${doc.name}"?`,
         {
           modal: true,
-          detail: `This deletes the file at ${item.doc.path}. It goes to the trash, so it can be recovered from there.`,
+          detail: `This deletes the file at ${doc.path}. It goes to the trash, so it can be recovered from there.`,
         },
         "Delete",
       );
@@ -568,29 +663,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       try {
-        await vscode.workspace.fs.delete(vscode.Uri.file(item.doc.path), { useTrash: true });
+        await vscode.workspace.fs.delete(vscode.Uri.file(doc.path), { useTrash: true });
       } catch (error) {
         vscode.window.showErrorMessage(`Could not delete the doc: ${message(error)}`);
         return;
       }
-      // The docs watcher refreshes the tree by itself, but not before the
+      // The docs watcher refreshes the view by itself, but not before the
       // command returns.
-      tree.refresh();
+      view.refresh();
     }),
 
-    vscode.commands.registerCommand("agentrus.removeDoc", async (item: DocItem) => {
-      // Unlink only. Deleting the user's file because they tidied a tree entry
+    vscode.commands.registerCommand("agentrus.removeDoc", async (payload: Payload) => {
+      const found = await docOf(payload);
+      if (!found) {
+        return;
+      }
+      // Unlink only. Deleting the user's file because they tidied a card away
       // would be a nasty surprise.
-      await store.removeDoc(item.initiative.id, item.doc.id);
-      tree.refresh();
+      await store.removeDoc(found.initiative.id, found.doc.id);
+      view.refresh();
     }),
 
-    vscode.commands.registerCommand("agentrus.removeInitiative", async (item: InitiativeItem) => {
-      const current = await requireRoot();
-      if (current) {
-        await removeInitiative(context, current, item.initiative, store, terminals, tree);
+    vscode.commands.registerCommand("agentrus.removeInitiative", async (payload: Payload) => {
+      const initiative = initiativeOf(payload);
+      const current = initiative && (await requireRoot());
+      if (initiative && current) {
+        await removeInitiative(context, current, initiative, store, terminals, view);
         await resolveCurrent();
-        tree.refresh();
+        view.refresh();
       }
     }),
   );
@@ -673,7 +773,7 @@ async function pickSkill(
   return entered.trim().replace(/^\/+/, "");
 }
 
-async function addAgent(initiative: Initiative, store: Store, tree: InitiativeTree): Promise<void> {
+async function addAgent(initiative: Initiative, store: Store, view: InitiativesViewProvider): Promise<void> {
   const taken = new Set(initiative.agents.map((agent) => agent.role));
 
   // Initiatives created before `generic` existed are missing it. Offer it as
@@ -705,7 +805,7 @@ async function addAgent(initiative: Initiative, store: Store, tree: InitiativeTr
         started: false,
         generation: 1,
       });
-      tree.refresh();
+      view.refresh();
       return;
     }
   }
@@ -770,7 +870,7 @@ async function addAgent(initiative: Initiative, store: Store, tree: InitiativeTr
     vscode.window.showErrorMessage(`"${name}" already exists in this initiative.`);
     return;
   }
-  tree.refresh();
+  view.refresh();
 }
 
 interface WorktreePlan {
@@ -948,7 +1048,7 @@ function invalidBranch(value: string): string | undefined {
   return undefined;
 }
 
-async function createInitiative(root: string, store: Store, tree: InitiativeTree): Promise<void> {
+async function createInitiative(root: string, store: Store, view: InitiativesViewProvider): Promise<void> {
   // Two initiatives whose names slugify the same would share a docs folder
   // (docs.ts) and produce the same session names (sessions.ts) — each one's
   // agents writing into the other's notes. Caught here, at the only moment the
@@ -1008,7 +1108,7 @@ async function createInitiative(root: string, store: Store, tree: InitiativeTree
 
   if (where.id === "repo") {
     await store.add(name, root, await currentRef(root), false);
-    tree.refresh();
+    view.refresh();
     return;
   }
 
@@ -1074,7 +1174,7 @@ async function createInitiative(root: string, store: Store, tree: InitiativeTree
   }
 
   await store.add(name, created, settled.branch, true);
-  tree.refresh();
+  view.refresh();
 }
 
 /**
@@ -1161,7 +1261,7 @@ async function addDoc(
   context: vscode.ExtensionContext,
   initiative: Initiative,
   store: Store,
-  tree: InitiativeTree,
+  view: InitiativesViewProvider,
 ): Promise<void> {
   const choice = await vscode.window.showQuickPick(
     [
@@ -1185,7 +1285,7 @@ async function addDoc(
       return;
     }
     await store.addDoc(initiative.id, basename(file.fsPath), file.fsPath);
-    tree.refresh();
+    view.refresh();
     await vscode.commands.executeCommand("vscode.open", file);
     return;
   }
@@ -1211,7 +1311,7 @@ async function addDoc(
 
   // No store entry: it lives in the docs folder, so the tree lists it by
   // itself. Only linked files outside the folder need remembering.
-  tree.refresh();
+  view.refresh();
   await vscode.commands.executeCommand("vscode.open", uri);
 }
 
@@ -1221,7 +1321,7 @@ async function removeInitiative(
   initiative: Initiative,
   store: Store,
   terminals: Terminals,
-  tree: InitiativeTree,
+  view: InitiativesViewProvider,
 ): Promise<void> {
   terminals.disposeInitiative(initiative);
   await removeInitiativeHookFiles(context, initiative);
@@ -1241,7 +1341,7 @@ async function removeInitiative(
       return;
     }
     await store.remove(initiative.id);
-    tree.refresh();
+    view.refresh();
     return;
   }
 
@@ -1290,7 +1390,7 @@ async function removeInitiative(
   }
 
   await store.remove(initiative.id);
-  tree.refresh();
+  view.refresh();
 }
 
 /**

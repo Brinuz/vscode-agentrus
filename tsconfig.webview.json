@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // The only part of the extension that runs in a browser, so the only part
+    // that gets the DOM.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src/webview"],
+  "exclude": []
+}

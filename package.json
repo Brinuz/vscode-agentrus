@@ -31,22 +31,11 @@
         {
           "id": "agentrus.initiatives",
           "name": "Initiatives",
-          "icon": "resources/agentrus.svg"
+          "icon": "resources/agentrus.svg",
+          "type": "webview"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "agentrus.initiatives",
-        "contents": "No initiatives yet.\n\nAn initiative is a git worktree on its own branch, with an architect, a dev, a reviewer and a generic agent pinned to it.\n[Create initiative](command:agentrus.createInitiative)",
-        "when": "agentrus.hasRepo"
-      },
-      {
-        "view": "agentrus.initiatives",
-        "contents": "Agent\"R\"Us needs an open folder that is a git repository.\n[Open folder](command:vscode.openFolder)",
-        "when": "!agentrus.hasRepo"
-      }
-    ],
     "commands": [
       {
         "command": "agentrus.createInitiative",
@@ -176,6 +165,10 @@
         "icon": "$(folder-opened)"
       },
       {
+        "command": "agentrus.openDoc",
+        "title": "Agent\"R\"Us: Open Doc"
+      },
+      {
         "command": "agentrus.revealDoc",
         "title": "Agent\"R\"Us: Reveal Doc in Finder",
         "icon": "$(folder-opened)"
@@ -199,185 +192,135 @@
           "group": "navigation@2"
         }
       ],
-      "view/item/context": [
+      "webview/context": [
         {
           "command": "agentrus.openAllAgents",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
-          "group": "inline@1"
-        },
-        {
-          "command": "agentrus.configureInitiative",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
-          "group": "inline@2"
-        },
-        {
-          "command": "agentrus.openAllAgents",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "0_open@1"
         },
         {
           "command": "agentrus.openWorktreeHere",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "0_open@2"
         },
         {
           "command": "agentrus.openWorktreeWindow",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "0_open@3"
         },
         {
           "command": "agentrus.addAgent",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "1_add@1"
         },
         {
           "command": "agentrus.newShell",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "1_add@2"
         },
         {
           "command": "agentrus.addDoc",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "1_add@3"
         },
         {
           "command": "agentrus.revealDocsFolder",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "1_add@4"
         },
         {
           "command": "agentrus.moveInitiativeUp",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "2_order@1"
         },
         {
           "command": "agentrus.moveInitiativeDown",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "2_order@2"
         },
         {
           "command": "agentrus.removeInitiative",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "3_modify@1"
         },
         {
           "command": "agentrus.openSettings",
-          "when": "view == agentrus.initiatives && viewItem == initiative",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "4_settings@1"
         },
         {
           "command": "agentrus.openAllAgents",
-          "when": "view == agentrus.initiatives && viewItem == group:agents",
-          "group": "inline@1"
-        },
-        {
-          "command": "agentrus.addAgent",
-          "when": "view == agentrus.initiatives && viewItem == group:agents",
-          "group": "inline@2"
-        },
-        {
-          "command": "agentrus.openAllAgents",
-          "when": "view == agentrus.initiatives && viewItem == group:agents",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'agents-group'",
           "group": "0_open@1"
         },
         {
           "command": "agentrus.addAgent",
-          "when": "view == agentrus.initiatives && viewItem == group:agents",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'agents-group'",
           "group": "1_add@1"
         },
         {
           "command": "agentrus.addDoc",
-          "when": "view == agentrus.initiatives && viewItem == group:docs",
-          "group": "inline@1"
-        },
-        {
-          "command": "agentrus.revealDocsFolder",
-          "when": "view == agentrus.initiatives && viewItem == group:docs",
-          "group": "inline@2"
-        },
-        {
-          "command": "agentrus.addDoc",
-          "when": "view == agentrus.initiatives && viewItem == group:docs",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'docs-group'",
           "group": "1_add@1"
         },
         {
           "command": "agentrus.revealDocsFolder",
-          "when": "view == agentrus.initiatives && viewItem == group:docs",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'docs-group'",
           "group": "1_add@2"
         },
         {
           "command": "agentrus.newShell",
-          "when": "view == agentrus.initiatives && viewItem == group:shells",
-          "group": "inline@1"
-        },
-        {
-          "command": "agentrus.newShell",
-          "when": "view == agentrus.initiatives && viewItem == group:shells",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'shells-group'",
           "group": "1_add@1"
         },
         {
           "command": "agentrus.addDefaultShells",
-          "when": "view == agentrus.initiatives && viewItem == group:shells",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'shells-group'",
           "group": "1_add@2"
         },
         {
-          "command": "agentrus.configureAgent",
-          "when": "view == agentrus.initiatives && viewItem =~ /^agent/",
-          "group": "inline@1"
-        },
-        {
           "command": "agentrus.changeModel",
-          "when": "view == agentrus.initiatives && viewItem =~ /^agent/",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'agent'",
           "group": "1_modify@1"
         },
         {
           "command": "agentrus.changeSkill",
-          "when": "view == agentrus.initiatives && viewItem =~ /^agent/",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'agent'",
           "group": "1_modify@2"
         },
         {
           "command": "agentrus.resetSession",
-          "when": "view == agentrus.initiatives && viewItem =~ /^agent/",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'agent'",
           "group": "1_modify@3"
         },
         {
           "command": "agentrus.removeAgent",
-          "when": "view == agentrus.initiatives && viewItem == agent-custom",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'agent' && agentrusCustom",
           "group": "2_remove@1"
         },
         {
-          "command": "agentrus.configureShell",
-          "when": "view == agentrus.initiatives && viewItem == shell",
-          "group": "inline@1"
-        },
-        {
           "command": "agentrus.renameShell",
-          "when": "view == agentrus.initiatives && viewItem == shell",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'shell'",
           "group": "1_modify@1"
         },
         {
           "command": "agentrus.removeShell",
-          "when": "view == agentrus.initiatives && viewItem == shell",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'shell'",
           "group": "2_remove@1"
         },
         {
-          "command": "agentrus.removeDoc",
-          "when": "view == agentrus.initiatives && viewItem == doc",
-          "group": "inline@1"
-        },
-        {
           "command": "agentrus.revealDoc",
-          "when": "view == agentrus.initiatives && viewItem == doc",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'doc'",
           "group": "1_modify@1"
         },
         {
           "command": "agentrus.revealDoc",
-          "when": "view == agentrus.initiatives && viewItem == doc-file",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'doc-file'",
           "group": "1_modify@1"
         },
         {
           "command": "agentrus.deleteDocFile",
-          "when": "view == agentrus.initiatives && viewItem == doc-file",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'doc-file'",
           "group": "2_remove@1"
         }
       ],
@@ -472,6 +415,10 @@
         },
         {
           "command": "agentrus.moveInitiativeDown",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.openDoc",
           "when": "false"
         },
         {
@@ -586,11 +533,12 @@
     "vscode:prepublish": "npm run check-types && node esbuild.js --production",
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/codicons": "^0.0.46-24",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.0"
   }

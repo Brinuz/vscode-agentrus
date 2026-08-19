@@ -1,0 +1,270 @@
+:root {
+  /* One nesting step: an icon column plus the gap after it, so a child's icon
+     lands under its parent's icon and its label under its parent's label. */
+  --step: 22px;
+  --gutter: 6px;
+}
+
+body {
+  /* Tall enough that there is somewhere to drop an initiative past the last
+     card, which is what sends it to the end. */
+  min-height: 100vh;
+  margin: 0;
+  padding: 2px 0 12px;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: transparent;
+  user-select: none;
+}
+
+.codicon {
+  flex: none;
+}
+
+/* Rows. Full width, like the tree's: the indent alone says what belongs to
+   what, so a row that stopped short of the edge would read as a third thing. */
+
+.card,
+.group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px var(--indent, var(--gutter));
+  cursor: pointer;
+}
+
+.card:hover,
+.group:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.card:focus-visible,
+.group:focus-visible,
+.action:focus-visible,
+.empty button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.initiative-header {
+  margin-top: 10px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-weight: 600;
+}
+
+.group,
+.group-body {
+  /* Overridden per group below; a theme without the chart colours still reads. */
+  --accent: var(--vscode-descriptionForeground);
+}
+
+.group {
+  --indent: calc(var(--gutter) + var(--step));
+  margin-top: 4px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  color: var(--accent);
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/*
+ * A hue per group, on the header and on the guide running down its children.
+ * Cool colours only: warm and green already mean working, needs you and idle
+ * on the agent cards, and a section that borrowed one would blunt all three.
+ * Shells take the terminal's cyan rather than a chart colour — the palette has
+ * no cyan, and a terminal is what a shell is.
+ */
+.agents-group {
+  --accent: var(--vscode-charts-blue);
+}
+
+.docs-group {
+  --accent: var(--vscode-charts-purple);
+}
+
+.shells-group {
+  --accent: var(--vscode-terminal-ansiCyan);
+}
+
+.group .count {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.group-body {
+  position: relative;
+}
+
+.group-body .card {
+  --indent: calc(var(--gutter) + var(--step) * 2);
+}
+
+/* Indent guide, down the middle of the group header's chevron and in its
+   colour, so a card can be traced back to the section it belongs to. */
+.group-body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--gutter) + var(--step) + 8px);
+  border-left: 1px solid var(--accent);
+  opacity: 0.4;
+}
+
+.chevron {
+  opacity: 0.8;
+}
+
+/* Text */
+
+.name,
+.role {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.role {
+  font-weight: 600;
+}
+
+.where,
+.detail,
+.count {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+  font-weight: normal;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent .lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agent .line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.badge {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--vscode-descriptionForeground);
+  border-radius: 9px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+/* Status chips. Traffic lights: green is clear to take, yellow is busy, red
+   is stopped and waiting on you. The yellow is the terminal's rather than
+   charts.yellow, which is a desaturated gold too close to its warmer
+   neighbours to tell apart at this size. */
+
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+
+.chip .codicon {
+  font-size: 11px;
+}
+
+.working {
+  color: var(--vscode-terminal-ansiYellow);
+}
+
+.needs-you {
+  color: var(--vscode-charts-red);
+}
+
+.idle {
+  color: var(--vscode-charts-green);
+}
+
+/* Reordering */
+
+.dragging {
+  opacity: 0.5;
+}
+
+.drop-target > .initiative-header {
+  box-shadow: 0 -2px 0 var(--vscode-focusBorder);
+}
+
+/* Hover actions */
+
+.actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin-left: auto;
+  visibility: hidden;
+}
+
+.card:hover > .actions,
+.group:hover > .actions,
+.card:focus-within > .actions,
+.group:focus-within > .actions {
+  visibility: visible;
+}
+
+.action {
+  display: flex;
+  padding: 2px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--vscode-icon-foreground);
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Empty states, which a webview view has to draw itself. */
+
+.empty {
+  padding: 12px 18px;
+}
+
+.empty p {
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.empty button {
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 2px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.empty button:hover {
+  background: var(--vscode-button-hoverBackground);
+}

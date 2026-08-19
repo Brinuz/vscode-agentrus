@@ -5,6 +5,7 @@ node_modules/**
 out/**
 esbuild.js
 tsconfig.json
+tsconfig.webview.json
 **/*.map
 **/*.ts
 .gitignore
