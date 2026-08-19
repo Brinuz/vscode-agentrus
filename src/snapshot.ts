@@ -64,5 +64,6 @@ export interface Payload {
 
 /** Messages the webview posts back to the extension. */
 export type Message =
+  | { type: "ready" }
   | { type: "command"; command: string; payload?: Payload }
   | { type: "reorder"; draggedId: string; ontoId?: string };

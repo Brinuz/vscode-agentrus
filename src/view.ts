@@ -40,9 +40,10 @@ export class InitiativesViewProvider implements vscode.WebviewViewProvider {
     };
     view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage((message: Message) => void this.receive(message));
-    // Hiding the view tears the webview down and shows it again through here,
-    // so this is also how a re-shown view gets its content back.
-    this.refresh();
+    // No snapshot from here: a message posted before the page's script runs
+    // is silently dropped, and nothing would retry — the view sat blank until
+    // the next incidental refresh. The page says "ready" when it can render,
+    // and that is what triggers the first paint, here and on every re-show.
   }
 
   /**
@@ -59,6 +60,10 @@ export class InitiativesViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async receive(message: Message): Promise<void> {
+    if (message.type === "ready") {
+      this.refresh();
+      return;
+    }
     if (message.type === "command") {
       await vscode.commands.executeCommand(message.command, message.payload);
       return;

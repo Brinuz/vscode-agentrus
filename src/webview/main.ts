@@ -30,6 +30,11 @@ let seeded = api.getState() !== undefined;
 
 window.addEventListener("message", (event: MessageEvent<Snapshot>) => render(event.data));
 
+// The page can only paint what it is sent, and a snapshot posted before this
+// script ran was silently dropped — so ask for one, on load and on every
+// re-show (hiding the view tears the page down and reloads it).
+api.postMessage({ type: "ready" });
+
 // Dropping past the last card sends the initiative to the end, which is what
 // the tree did with a target of nothing.
 document.body.addEventListener("dragover", allowDrop);
