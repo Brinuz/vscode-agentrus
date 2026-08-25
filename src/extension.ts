@@ -24,7 +24,6 @@ import {
   AGENT_ICONS,
   agentIcon,
   agentKey,
-  DEFAULT_AGENTS,
   Doc,
   Initiative,
   Shell,
@@ -34,7 +33,7 @@ import { seedWorktree } from "./seed";
 import { deleteSessions, launchCommand, sessionExists, sessionName } from "./sessions";
 import { Payload } from "./snapshot";
 import { ActivityMonitor } from "./status";
-import { defaultModel, defaultShells, defaultSkill, Store } from "./store";
+import { defaultShells, Store } from "./store";
 import { Terminals } from "./terminals";
 import { message, slugify } from "./util";
 import { InitiativesViewProvider } from "./view";
@@ -775,40 +774,6 @@ async function pickSkill(
 
 async function addAgent(initiative: Initiative, store: Store, view: InitiativesViewProvider): Promise<void> {
   const taken = new Set(initiative.agents.map((agent) => agent.role));
-
-  // Initiatives created before `generic` existed are missing it. Offer it as
-  // one click rather than four prompts, and mint it exactly as a new
-  // initiative would — not as a custom agent — so the two are identical and
-  // neither can be removed.
-  const missingDefaults = DEFAULT_AGENTS.filter((role) => !taken.has(role));
-  if (missingDefaults.length > 0) {
-    const preset = await vscode.window.showQuickPick(
-      [
-        ...missingDefaults.map((role) => ({
-          label: `$(${agentIcon({ role, model: "" })}) ${role}`,
-          description: `default agent · ${defaultModel(role)}`,
-          id: "default" as const,
-          role,
-        })),
-        { label: "$(person-add) Name a new agent…", id: "custom" as const, role: "" },
-      ],
-      { title: `Add an agent to "${initiative.name}"` },
-    );
-    if (!preset) {
-      return;
-    }
-    if (preset.id === "default") {
-      await store.addAgent(initiative.id, {
-        role: preset.role,
-        model: defaultModel(preset.role),
-        skill: defaultSkill(preset.role),
-        started: false,
-        generation: 1,
-      });
-      view.refresh();
-      return;
-    }
-  }
 
   const role = await vscode.window.showInputBox({
     title: `New agent — ${initiative.name}`,
