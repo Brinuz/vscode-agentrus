@@ -10,18 +10,19 @@ An **initiative** is a unit of work — "Auth revamp", "Billing migration". It h
 
 When you create an initiative you choose where it runs: **in the repo you have open**, in **a git worktree of its own** on a new branch, or in a worktree on **a branch you already have** — so that parallel initiatives never touch each other's files. Agent"R"Us only ever deletes a worktree it created.
 
-Every initiative starts with four agents:
+Every initiative starts with five agents:
 
 | Agent | Default model | |
 | --- | --- | --- |
 | architect | `fable` | |
 | dev | `opus` | |
 | reviewer | `fable` | |
-| generic | `sonnet` | A little helper — questions, odd jobs, anything that is not the other three |
+| qa | `fable` | Walks the feature through the real thing — scenarios, repros, regression passes |
+| generic | `sonnet` | A little helper — questions, odd jobs, anything that is not the other four |
 
-Those four are always there and cannot be removed. **Add agent** puts more alongside them, each with its own name, icon, model and startup skill; only the ones you added can be removed.
+Those five are always there and cannot be removed. **Add agent** puts more alongside them, each with its own name, icon, model and startup skill; only the ones you added can be removed.
 
-Initiatives created before `generic` existed still have three agents — no migration touches them. **Add agent** notices what a given initiative is missing and offers it as a one-click preset, minted exactly as a new initiative would (built-in icon, `agentrus.models.generic`), so it ends up indistinguishable from one that had it from the start.
+Initiatives created before a default agent existed still go without it — no migration touches them. **Add agent** notices what a given initiative is missing and offers it as a one-click preset, minted exactly as a new initiative would (built-in icon, `agentrus.models.<agent>`) and dropped into its usual place in the list, so it ends up indistinguishable from one that had it from the start.
 
 Clicking an agent opens a terminal in that initiative's worktree and drops you into that agent's conversation — the same one as last time, with its own history. Close the terminal, come back tomorrow, click again: you land back where you left off.
 
@@ -151,10 +152,12 @@ Agent and shell terminals open in the panel by default; set `agentrus.terminalLo
 | `agentrus.models.architect` | `fable` | Model for new architect agents |
 | `agentrus.models.dev` | `opus` | Model for new dev agents |
 | `agentrus.models.reviewer` | `fable` | Model for new reviewer agents |
+| `agentrus.models.qa` | `fable` | Model for new QA agents |
 | `agentrus.models.generic` | `sonnet` | Model for new generic agents |
 | `agentrus.skills.architect` | — | Startup skill for new architect agents |
 | `agentrus.skills.dev` | — | Startup skill for new dev agents |
 | `agentrus.skills.reviewer` | — | Startup skill for new reviewer agents |
+| `agentrus.skills.qa` | — | Startup skill for new QA agents |
 | `agentrus.skills.generic` | — | Startup skill for new generic agents |
 | `agentrus.defaultShells` | `[]` | Shells every new initiative starts with, e.g. `["dev", "logs"]` |
 | `agentrus.terminalLocation` | `panel` | `panel` or `editor` — where agent and shell terminals open |

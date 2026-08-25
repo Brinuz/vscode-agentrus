@@ -164,7 +164,7 @@ export class Store {
     if (!initiative || initiative.agents.some((a) => a.role === agent.role)) {
       return undefined;
     }
-    initiative.agents.push(agent);
+    initiative.agents.splice(slotFor(initiative.agents, agent.role), 0, agent);
     await this.flush();
     return agent;
   }
@@ -265,6 +265,23 @@ export class Store {
       await this.context.globalState.update(this.key, this.initiatives);
     }
   }
+}
+
+/**
+ * Where an agent joins the list. A default one takes its place in
+ * DEFAULT_AGENTS order, so an initiative that predates it ends up looking like
+ * one created today instead of carrying it after the agents the user named.
+ */
+function slotFor(agents: Agent[], role: Role): number {
+  const rank = rankOf(role);
+  const next = agents.findIndex((agent) => rankOf(agent.role) > rank);
+  return next < 0 ? agents.length : next;
+}
+
+/** Defaults sort in DEFAULT_AGENTS order; agents the user named come after. */
+function rankOf(role: Role): number {
+  const rank = DEFAULT_AGENTS.indexOf(role);
+  return rank < 0 ? DEFAULT_AGENTS.length : rank;
 }
 
 /**
