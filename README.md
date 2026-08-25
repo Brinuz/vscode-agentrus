@@ -22,7 +22,7 @@ Every initiative starts with five agents:
 
 Those five are always there and cannot be removed. **Add agent** puts more alongside them, each with its own name, icon, model and startup skill; only the ones you added can be removed.
 
-Initiatives created before a default agent existed still go without it — no migration touches them. **Add agent** notices what a given initiative is missing and offers it as a one-click preset, minted exactly as a new initiative would (built-in icon, `agentrus.models.<agent>`) and dropped into its usual place in the list, so it ends up indistinguishable from one that had it from the start.
+An initiative created before one of the defaults existed picks it up on the next load. A default can never be removed, so an initiative missing one only ever means it is older than that agent — there is no choice of yours to preserve. It is minted exactly as a new initiative would (built-in icon, `agentrus.models.<agent>`) and dropped into its usual place in the list, so it ends up indistinguishable from one that had it from the start.
 
 Clicking an agent opens a terminal in that initiative's worktree and drops you into that agent's conversation — the same one as last time, with its own history. Close the terminal, come back tomorrow, click again: you land back where you left off.
 

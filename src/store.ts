@@ -42,10 +42,12 @@ export class Store {
       // Agents used to be identified by a minted UUID and their conversations
       // were created without a title, so there is no name to resume them by.
       // Start those agents over rather than resuming into an error.
-      agents: i.agents.map((agent) =>
-        "sessionId" in agent
-          ? { role: agent.role, model: agent.model, started: false, generation: 1 }
-          : agent,
+      agents: withDefaults(
+        i.agents.map((agent) =>
+          "sessionId" in agent
+            ? { role: agent.role, model: agent.model, started: false, generation: 1 }
+            : agent,
+        ),
       ),
     }));
 
@@ -265,6 +267,28 @@ export class Store {
       await this.context.globalState.update(this.key, this.initiatives);
     }
   }
+}
+
+/**
+ * Give an initiative the default agents it predates, each in its usual place.
+ * A default can never be removed, so one that is missing only ever means the
+ * initiative is older than it — there is no choice of the user's to preserve.
+ */
+function withDefaults(agents: Agent[]): Agent[] {
+  const filled = [...agents];
+  for (const role of DEFAULT_AGENTS) {
+    if (filled.some((agent) => agent.role === role)) {
+      continue;
+    }
+    filled.splice(slotFor(filled, role), 0, {
+      role,
+      model: defaultModel(role),
+      skill: defaultSkill(role),
+      started: false,
+      generation: 1,
+    });
+  }
+  return filled;
 }
 
 /**
