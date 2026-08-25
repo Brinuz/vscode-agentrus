@@ -67,7 +67,7 @@ function render(snapshot: Snapshot): void {
   if (snapshot.initiatives.length === 0) {
     root.append(
       empty(
-        "No initiatives yet. An initiative is a git worktree on its own branch, with an architect, a dev, a reviewer and a generic agent pinned to it.",
+        "No initiatives yet. An initiative is a git worktree on its own branch, with an architect, a dev, a reviewer, a QA and a generic agent pinned to it.",
         "Create initiative",
         "agentrus.createInitiative",
       ),

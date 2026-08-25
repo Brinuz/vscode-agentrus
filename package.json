@@ -457,6 +457,11 @@
           "default": "fable",
           "description": "Model alias used for new reviewer agents."
         },
+        "agentrus.models.qa": {
+          "type": "string",
+          "default": "fable",
+          "description": "Model alias used for new QA agents."
+        },
         "agentrus.models.generic": {
           "type": "string",
           "default": "sonnet",
@@ -476,6 +481,11 @@
           "type": "string",
           "default": "",
           "description": "Skill new reviewer agents invoke as the first message of every launch (the initiative's docs directory is passed as its argument). Empty for none."
+        },
+        "agentrus.skills.qa": {
+          "type": "string",
+          "default": "",
+          "description": "Skill new QA agents invoke as the first message of every launch (the initiative's docs directory is passed as its argument). Empty for none."
         },
         "agentrus.skills.generic": {
           "type": "string",

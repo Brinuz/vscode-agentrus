@@ -1,5 +1,5 @@
 /** Agents minted for every new initiative, in tree order. */
-export const DEFAULT_AGENTS = ["architect", "dev", "reviewer", "generic"] as const;
+export const DEFAULT_AGENTS: readonly Role[] = ["architect", "dev", "reviewer", "qa", "generic"];
 
 /**
  * An agent's name, unique within its initiative. Not a closed set: initiatives
@@ -74,6 +74,7 @@ const DEFAULT_ICONS: Record<string, string> = {
   architect: "compass",
   dev: "tools",
   reviewer: "search",
+  qa: "beaker",
   generic: "comment-discussion",
 };
 
