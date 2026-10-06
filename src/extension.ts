@@ -668,16 +668,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       const file = await vscode.window.showQuickPick(
         [
-          { label: `$(info) ${MANIFEST}`, name: MANIFEST },
-          ...picked.archive.files.map((name) => ({ label: `$(file) ${name}`, name })),
+          { label: "$(folder-opened) Reveal in Finder", id: "reveal" as const, name: "" },
+          { label: `$(info) ${MANIFEST}`, id: "file" as const, name: MANIFEST },
+          ...picked.archive.files.map((name) => ({
+            label: `$(file) ${name}`,
+            id: "file" as const,
+            name,
+          })),
         ],
         { title: `Docs of "${picked.archive.name}"` },
       );
-      if (file) {
+      if (!file) {
+        return;
+      }
+      if (file.id === "file") {
         await vscode.commands.executeCommand(
           "vscode.open",
           vscode.Uri.file(join(picked.archive.path, file.name)),
         );
+      } else {
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(picked.archive.path));
       }
     }),
 
