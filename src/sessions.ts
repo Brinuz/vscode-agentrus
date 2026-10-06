@@ -51,15 +51,14 @@ export function launchCommand(
   // The "--" is load-bearing: --add-dir is variadic and would otherwise
   // swallow the prompt as just another directory, silently.
   const prompt = agent.skill ? ` -- ${quote(`/${agent.skill} docs-dir: ${docsDir}`)}` : "";
-  const create = `${claudeCommand} --name ${name} ${flags}${prompt}`;
   if (!resume) {
-    return create;
+    return `${claudeCommand} --name ${name} ${flags}${prompt}`;
   }
 
-  // Resume, falling back to creating it: an agent whose terminal was closed
-  // before its first message has no conversation to resume, and would
-  // otherwise be stuck failing forever.
-  return `${claudeCommand} --resume ${name} ${flags}${prompt} || ${create}`;
+  // No `|| create` fallback: the caller already decided from disk that the
+  // session exists, and repeating the command would push it past macOS's
+  // 1024-byte tty input limit, cutting it off mid-quote.
+  return `${claudeCommand} --resume ${name} ${flags}${prompt}`;
 }
 
 /**
