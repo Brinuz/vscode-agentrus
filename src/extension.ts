@@ -9,7 +9,9 @@ import {
   ensureArchiveRoot,
   ensureDocsDir,
   hasDocs,
+  listArchives,
   listDocFiles,
+  MANIFEST,
   trashDocs,
 } from "./docs";
 import {
@@ -643,6 +645,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const reveal = await vscode.window.showInformationMessage(`Copied the archive path: ${dir}`, "Reveal");
       if (reveal === "Reveal") {
         await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
+      }
+    }),
+
+    vscode.commands.registerCommand("agentrus.openArchivedDocs", async () => {
+      const archives = await listArchives(context);
+      if (archives.length === 0) {
+        vscode.window.showInformationMessage("No initiatives have been archived yet.");
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        archives.map((archive) => ({
+          label: archive.name,
+          description: `${archive.branch} · archived ${archive.archived.slice(0, 10)}`,
+          detail: `${archive.files.length} files`,
+          archive,
+        })),
+        { title: "Open archived docs", matchOnDescription: true },
+      );
+      if (!picked) {
+        return;
+      }
+      const file = await vscode.window.showQuickPick(
+        [
+          { label: `$(info) ${MANIFEST}`, name: MANIFEST },
+          ...picked.archive.files.map((name) => ({ label: `$(file) ${name}`, name })),
+        ],
+        { title: `Docs of "${picked.archive.name}"` },
+      );
+      if (file) {
+        await vscode.commands.executeCommand(
+          "vscode.open",
+          vscode.Uri.file(join(picked.archive.path, file.name)),
+        );
       }
     }),
 

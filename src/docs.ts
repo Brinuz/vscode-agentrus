@@ -110,7 +110,7 @@ export async function archiveDocs(
   await writeIndex(root);
 }
 
-const MANIFEST = "ARCHIVE.md";
+export const MANIFEST = "ARCHIVE.md";
 
 function manifest(initiative: Initiative, head: string | undefined, archived: Date): string {
   const fields = {
@@ -145,31 +145,62 @@ function manifest(initiative: Initiative, head: string | undefined, archived: Da
   ].join("\n");
 }
 
+export interface Archive {
+  folder: string;
+  path: string;
+  name: string;
+  branch: string;
+  archived: string;
+  /** Visible files, the manifest excluded. */
+  files: string[];
+}
+
+/** Newest first. */
+export async function listArchives(context: vscode.ExtensionContext): Promise<Archive[]> {
+  return readArchives(archiveRoot(context));
+}
+
+async function readArchives(root: string): Promise<Archive[]> {
+  let folders: string[];
+  try {
+    folders = await readdir(root);
+  } catch {
+    return [];
+  }
+  const archives: Archive[] = [];
+  for (const folder of folders) {
+    const path = join(root, folder);
+    let files: string[];
+    let fields: Record<string, string>;
+    try {
+      files = await readdir(path);
+      fields = frontmatter(await readFile(join(path, MANIFEST), "utf8"));
+    } catch {
+      continue;
+    }
+    archives.push({
+      folder,
+      path,
+      name: fields.name ?? folder,
+      branch: fields.branch ?? "none",
+      archived: fields.archived ?? "",
+      files: files.filter((name) => name !== MANIFEST && !name.startsWith(".")).sort(),
+    });
+  }
+  return archives.sort((a, b) => b.archived.localeCompare(a.archived));
+}
+
 /**
  * Rebuilt from every folder's ARCHIVE.md rather than appended to, so folders
  * deleted or renamed by hand drop out on the next archive.
  */
 async function writeIndex(root: string): Promise<void> {
-  const entries: { line: string; archived: string }[] = [];
-  for (const folder of await readdir(root)) {
-    let files: string[];
-    let fields: Record<string, string>;
-    try {
-      files = await readdir(join(root, folder));
-      fields = frontmatter(await readFile(join(root, folder, MANIFEST), "utf8"));
-    } catch {
-      continue;
-    }
-    const count = files.filter((name) => name !== MANIFEST && !name.startsWith(".")).length;
-    const archived = fields.archived ?? "";
-    entries.push({
-      archived,
-      line: `- [${fields.name ?? folder}](${encodeURI(folder)}/${MANIFEST}) · branch ${fields.branch ?? "none"} · archived ${archived.slice(0, 10)} · ${count} files`,
-    });
-  }
-  entries.sort((a, b) => b.archived.localeCompare(a.archived));
+  const lines = (await readArchives(root)).map(
+    (archive) =>
+      `- [${archive.name}](${encodeURI(archive.folder)}/${MANIFEST}) · branch ${archive.branch} · archived ${archive.archived.slice(0, 10)} · ${archive.files.length} files`,
+  );
   const header = `# Agent"R"Us archive\n\nDocs of removed initiatives, one folder each. Each folder's ${MANIFEST} records the branch, commit, agents and linked docs.\n\n`;
-  await writeFile(join(root, "INDEX.md"), header + entries.map((entry) => entry.line).join("\n") + "\n");
+  await writeFile(join(root, "INDEX.md"), header + lines.join("\n") + "\n");
 }
 
 function frontmatter(text: string): Record<string, string> {

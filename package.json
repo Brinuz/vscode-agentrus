@@ -169,6 +169,10 @@
         "title": "Agent\"R\"Us: Copy Archive Path"
       },
       {
+        "command": "agentrus.openArchivedDocs",
+        "title": "Agent\"R\"Us: Open Archived Docs"
+      },
+      {
         "command": "agentrus.openDoc",
         "title": "Agent\"R\"Us: Open Doc"
       },
