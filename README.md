@@ -66,7 +66,9 @@ Starting from **an existing branch** lists your local branches, marking any alre
 
 ### Docs
 
-Docs are **not** stored in your repo — there is nothing to commit and nothing to gitignore. They live in the extension's global storage, one folder per initiative, so they also survive the initiative's worktree being deleted.
+Docs are **not** stored in your repo — there is nothing to commit and nothing to gitignore. They live in the extension's global storage, one folder per initiative, outside the worktree.
+
+Removing an initiative asks what to do with its docs. **Archive docs** moves the folder into an `archive/` folder next to the docs, with an `ARCHIVE.md` recording the branch, last commit, worktree, agents and their session names, and linked docs. An `INDEX.md` at the archive root lists every archived initiative, so one path is enough to hand an agent. **Delete docs** sends the folder to the trash. Linked files outside the folder are never deleted either way. An initiative with no docs is removed without asking. Run **Agent"R"Us: Copy Archive Path** from the command palette to get the archive's location.
 
 Agents are launched with `--add-dir <that folder>`, so they can read and write the docs even though the docs sit outside the working tree. Use **Reveal Docs Folder** on the Docs group to open it in Finder.
 

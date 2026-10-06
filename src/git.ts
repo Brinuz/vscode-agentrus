@@ -60,6 +60,10 @@ export async function currentRef(root: string): Promise<string> {
   return git(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
 }
 
+export async function headSha(root: string): Promise<string> {
+  return git(root, ["rev-parse", "HEAD"]);
+}
+
 export async function branchExists(root: string, branch: string): Promise<boolean> {
   try {
     await git(root, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);

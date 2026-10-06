@@ -1,8 +1,17 @@
-import { readdir, stat } from "node:fs/promises";
+import { readdir, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import * as vscode from "vscode";
-import { ensureDocsDir, listDocFiles } from "./docs";
+import {
+  archiveDocs,
+  archiveRoot,
+  docsDir,
+  ensureArchiveRoot,
+  ensureDocsDir,
+  hasDocs,
+  listDocFiles,
+  trashDocs,
+} from "./docs";
 import {
   ensureHookSettings,
   ensureStatusDir,
@@ -14,6 +23,7 @@ import {
   canonical,
   currentRef,
   deleteBranch,
+  headSha,
   listBranches,
   listRemoteBranches,
   mainRepoRoot,
@@ -623,6 +633,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const initiative = initiativeOf(payload);
       if (initiative) {
         const dir = await ensureDocsDir(context, initiative);
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
+      }
+    }),
+
+    vscode.commands.registerCommand("agentrus.copyArchivePath", async () => {
+      const dir = await ensureArchiveRoot(context);
+      await vscode.env.clipboard.writeText(dir);
+      const reveal = await vscode.window.showInformationMessage(`Copied the archive path: ${dir}`, "Reveal");
+      if (reveal === "Reveal") {
         await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(dir));
       }
     }),
@@ -1323,9 +1342,6 @@ async function removeInitiative(
   terminals: Terminals,
   view: InitiativesViewProvider,
 ): Promise<void> {
-  terminals.disposeInitiative(initiative);
-  await removeInitiativeHookFiles(context, initiative);
-
   // Nothing on disk is ours to delete: the initiative just pointed at a repo
   // the user already had.
   if (!initiative.managed) {
@@ -1333,13 +1349,20 @@ async function removeInitiative(
       `Remove initiative "${initiative.name}"?`,
       {
         modal: true,
-        detail: "Its agents and shells are forgotten. No files are deleted — this initiative has no worktree of its own, and its docs stay where they are.",
+        detail: "Its agents and shells are forgotten. The repo is not touched — this initiative has no worktree of its own.",
       },
       "Remove",
     );
     if (confirmed !== "Remove") {
       return;
     }
+    const docsChoice = await askDocsChoice(context, initiative);
+    if (!docsChoice) {
+      return;
+    }
+    terminals.disposeInitiative(initiative);
+    await removeInitiativeHookFiles(context, initiative);
+    await disposeDocs(context, initiative, docsChoice, undefined);
     await store.remove(initiative.id);
     view.refresh();
     return;
@@ -1349,7 +1372,7 @@ async function removeInitiative(
     `Remove initiative "${initiative.name}"?`,
     {
       modal: true,
-      detail: `This deletes the worktree at ${initiative.worktreePath}. The branch "${initiative.branch}" is kept unless you choose otherwise, and the initiative's docs are kept either way.`,
+      detail: `This deletes the worktree at ${initiative.worktreePath}. The branch "${initiative.branch}" is kept unless you choose otherwise.`,
     },
     "Remove worktree",
     "Remove worktree and branch",
@@ -1357,6 +1380,15 @@ async function removeInitiative(
   if (!confirmed) {
     return;
   }
+  const docsChoice = await askDocsChoice(context, initiative);
+  if (!docsChoice) {
+    return;
+  }
+
+  // Read before the worktree goes, for the archive's manifest.
+  const head = await headSha(initiative.worktreePath).catch(() => undefined);
+  terminals.disposeInitiative(initiative);
+  await removeInitiativeHookFiles(context, initiative);
 
   try {
     await removeWorktree(root, initiative.worktreePath, false);
@@ -1389,8 +1421,54 @@ async function removeInitiative(
     }
   }
 
+  await disposeDocs(context, initiative, docsChoice, head);
   await store.remove(initiative.id);
   view.refresh();
+}
+
+type DocsChoice = "Archive docs" | "Delete docs" | "Nothing to keep";
+
+/** Undefined when the user dismissed the question, which cancels the removal. */
+async function askDocsChoice(
+  context: vscode.ExtensionContext,
+  initiative: Initiative,
+): Promise<DocsChoice | undefined> {
+  if (!(await hasDocs(context, initiative))) {
+    return "Nothing to keep";
+  }
+  return vscode.window.showWarningMessage(
+    `What should happen to the docs of "${initiative.name}"?`,
+    {
+      modal: true,
+      detail: `Archive moves the docs folder to ${archiveRoot(context)}, with a note of the branch, commit, agents and linked docs. Delete sends the docs folder to the trash. Linked files outside it are never deleted.`,
+    },
+    "Archive docs",
+    "Delete docs",
+  );
+}
+
+/**
+ * Runs after the worktree is gone, so a failure here only reports: the
+ * initiative is removed either way.
+ */
+async function disposeDocs(
+  context: vscode.ExtensionContext,
+  initiative: Initiative,
+  choice: DocsChoice,
+  head: string | undefined,
+): Promise<void> {
+  const dir = docsDir(context, initiative);
+  try {
+    if (choice === "Archive docs") {
+      await archiveDocs(context, initiative, head);
+    } else if (choice === "Delete docs") {
+      await trashDocs(context, initiative);
+    } else {
+      await rm(dir, { recursive: true, force: true });
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage(`Could not dispose of the docs at ${dir}: ${message(error)}`);
+  }
 }
 
 /**

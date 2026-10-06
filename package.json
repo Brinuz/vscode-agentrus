@@ -165,6 +165,10 @@
         "icon": "$(folder-opened)"
       },
       {
+        "command": "agentrus.copyArchivePath",
+        "title": "Agent\"R\"Us: Copy Archive Path"
+      },
+      {
         "command": "agentrus.openDoc",
         "title": "Agent\"R\"Us: Open Doc"
       },
