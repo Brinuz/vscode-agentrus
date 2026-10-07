@@ -146,6 +146,11 @@ export async function removeWorktree(root: string, path: string, force: boolean)
   await git(root, args);
 }
 
+/** Forget worktrees whose folders are gone. */
+export async function pruneWorktrees(root: string): Promise<void> {
+  await git(root, ["worktree", "prune"]);
+}
+
 export async function deleteBranch(root: string, branch: string, force: boolean): Promise<void> {
   await git(root, ["branch", force ? "-D" : "-d", branch]);
 }

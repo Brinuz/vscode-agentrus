@@ -29,6 +29,7 @@ import {
   listBranches,
   listRemoteBranches,
   mainRepoRoot,
+  pruneWorktrees,
   removeWorktree,
 } from "./git";
 import {
@@ -1405,7 +1406,7 @@ async function removeInitiative(
     if (!docsChoice) {
       return;
     }
-    terminals.disposeInitiative(initiative);
+    await terminals.disposeInitiative(initiative);
     await removeInitiativeHookFiles(context, initiative);
     await disposeDocs(context, initiative, docsChoice, undefined);
     await store.remove(initiative.id);
@@ -1432,28 +1433,11 @@ async function removeInitiative(
 
   // Read before the worktree goes, for the archive's manifest.
   const head = await headSha(initiative.worktreePath).catch(() => undefined);
-  terminals.disposeInitiative(initiative);
+  await terminals.disposeInitiative(initiative);
   await removeInitiativeHookFiles(context, initiative);
 
-  try {
-    await removeWorktree(root, initiative.worktreePath, false);
-  } catch (error) {
-    // Git refuses to drop a worktree with uncommitted work, which is exactly
-    // the case where the user deserves a second look before losing it.
-    const force = await vscode.window.showWarningMessage(
-      `The worktree for "${initiative.name}" has uncommitted changes or untracked files.`,
-      { modal: true, detail: `Git said: ${message(error)}` },
-      "Discard them and remove",
-    );
-    if (force !== "Discard them and remove") {
-      return;
-    }
-    try {
-      await removeWorktree(root, initiative.worktreePath, true);
-    } catch (forceError) {
-      vscode.window.showErrorMessage(`Could not remove the worktree: ${message(forceError)}`);
-      return;
-    }
+  if (!(await deleteWorktree(root, initiative))) {
+    return;
   }
 
   if (confirmed === "Remove worktree and branch" && initiative.branch) {
@@ -1469,6 +1453,69 @@ async function removeInitiative(
   await disposeDocs(context, initiative, docsChoice, head);
   await store.remove(initiative.id);
   view.refresh();
+}
+
+/** False when the worktree is still there: the user backed out, or it failed. */
+async function deleteWorktree(root: string, initiative: Initiative): Promise<boolean> {
+  const path = initiative.worktreePath;
+  try {
+    await removeWorktree(root, path, false);
+    return true;
+  } catch (error) {
+    // Git deletes the .git file before the rest, so a removal that dies
+    // midway (a process still writing, a file it cannot delete) leaves a
+    // tree git no longer recognizes. Nothing in it can be recovered through
+    // git any more, so finish what was asked.
+    if (await isHalfRemoved(path)) {
+      return clearLeftovers(root, path);
+    }
+    // Git refuses to drop a worktree with uncommitted work, which is exactly
+    // the case where the user deserves a second look before losing it.
+    if (!message(error).includes("modified or untracked files")) {
+      vscode.window.showErrorMessage(`Could not remove the worktree: ${message(error)}`);
+      return false;
+    }
+    const force = await vscode.window.showWarningMessage(
+      `The worktree for "${initiative.name}" has uncommitted changes or untracked files.`,
+      { modal: true, detail: `Git said: ${message(error)}` },
+      "Discard them and remove",
+    );
+    if (force !== "Discard them and remove") {
+      return false;
+    }
+    try {
+      await removeWorktree(root, path, true);
+      return true;
+    } catch (forceError) {
+      if (await isHalfRemoved(path)) {
+        return clearLeftovers(root, path);
+      }
+      vscode.window.showErrorMessage(`Could not remove the worktree: ${message(forceError)}`);
+      return false;
+    }
+  }
+}
+
+/** True when the worktree folder has lost its .git file, or is gone altogether. */
+async function isHalfRemoved(path: string): Promise<boolean> {
+  try {
+    await stat(join(path, ".git"));
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+async function clearLeftovers(root: string, path: string): Promise<boolean> {
+  try {
+    // Retries ride out a process that is still letting go of the folder.
+    await rm(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await pruneWorktrees(root);
+    return true;
+  } catch (error) {
+    vscode.window.showErrorMessage(`Could not finish removing the worktree at ${path}: ${message(error)}`);
+    return false;
+  }
 }
 
 type DocsChoice = "Archive docs" | "Delete docs" | "Nothing to keep";

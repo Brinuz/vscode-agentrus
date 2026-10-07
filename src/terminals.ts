@@ -117,21 +117,46 @@ export class Terminals implements vscode.Disposable {
     }
   }
 
-  /** Close every terminal belonging to an initiative that is going away. */
-  disposeInitiative(initiative: Initiative): void {
+  /**
+   * Close every terminal belonging to an initiative that is going away, and
+   * wait for them to go. `dispose()` only asks; an agent still writing into
+   * the worktree while git deletes it leaves a half-removed tree behind.
+   */
+  async disposeInitiative(initiative: Initiative): Promise<void> {
+    const closing: Promise<void>[] = [];
     for (const [key, terminal] of [...this.terminals]) {
       if (key.startsWith(`${initiative.id}:`)) {
+        closing.push(closed(terminal));
         terminal.dispose();
         this.terminals.delete(key);
       }
     }
     this.changed.fire();
+    await Promise.all(closing);
   }
 
   dispose(): void {
     this.subscription.dispose();
     this.changed.dispose();
   }
+}
+
+/** Resolves once VS Code reports the terminal closed, or after a few seconds
+ * so a terminal that never reports cannot hold up the caller. */
+function closed(terminal: vscode.Terminal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = (): void => {
+      subscription.dispose();
+      clearTimeout(timer);
+      resolve();
+    };
+    const subscription = vscode.window.onDidCloseTerminal((closing) => {
+      if (closing === terminal) {
+        done();
+      }
+    });
+    const timer = setTimeout(done, 5000);
+  });
 }
 
 function id(initiative: Initiative, key: string): string {
