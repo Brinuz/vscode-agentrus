@@ -129,7 +129,7 @@ Open a folder that is a git repository, then open the Agent"R"Us view in the act
 
 Every row's **cog** opens the same actions its right-click menu offers — the two never disagree about what is available, so it does not matter which one you reach for. The cog is a menu of the lot; right-click lists them individually.
 
-- **Create initiative** (`+` in the view title) — asks for a name and where it runs: the repo you have open, a new worktree, or a worktree on an existing branch. See [Creating a worktree](#creating-a-worktree).
+- **Create initiative** (`+` in the view title) — asks for a name and where it runs: the repo you have open, a new worktree, or a worktree on an existing branch. See [Creating a worktree](#creating-a-worktree). Once a worktree is ready it offers to open it in this window, the same switch as **Open worktree in this window**.
 - **Click an agent** — opens or reveals its terminal, resuming its session.
 - **Open all agents** (on an initiative or its Agents group) — brings up all of them at once; Esc during a skill prompt backs out of the whole batch.
 - **Add agent** — a missing default as a one-click preset, or a new agent you name, icon, model and skill yourself.
