@@ -442,6 +442,11 @@
     "configuration": {
       "title": "Agent\"R\"Us",
       "properties": {
+        "agentrus.models.orchestrator": {
+          "type": "string",
+          "default": "fable",
+          "description": "Model alias used for new orchestrator agents — the conversation you drive an initiative from."
+        },
         "agentrus.models.architect": {
           "type": "string",
           "default": "fable",
@@ -466,6 +471,11 @@
           "type": "string",
           "default": "sonnet",
           "description": "Model alias used for new generic agents — the little helper for questions and odd jobs."
+        },
+        "agentrus.skills.orchestrator": {
+          "type": "string",
+          "default": "",
+          "description": "Skill new orchestrator agents invoke as the first message of every launch (the initiative's docs directory is passed as its argument). Empty for none."
         },
         "agentrus.skills.architect": {
           "type": "string",

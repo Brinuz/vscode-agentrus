@@ -1085,7 +1085,7 @@ async function createInitiative(root: string, store: Store, view: InitiativesVie
   const takenSlugs = new Map(store.all().map((i) => [slugify(i.name), i.name]));
   const name = await vscode.window.showInputBox({
     title: "New initiative",
-    prompt: "Name this initiative — it gets an architect, a dev, a reviewer and a generic agent.",
+    prompt: "Name this initiative — it gets an orchestrator, an architect, a dev, a reviewer, a QA and a generic agent.",
     placeHolder: "Auth revamp",
     validateInput: (value) => {
       const slug = slugify(value);

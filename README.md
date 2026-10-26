@@ -10,17 +10,18 @@ An **initiative** is a unit of work — "Auth revamp", "Billing migration". It h
 
 When you create an initiative you choose where it runs: **in the repo you have open**, in **a git worktree of its own** on a new branch, or in a worktree on **a branch you already have** — so that parallel initiatives never touch each other's files. Agent"R"Us only ever deletes a worktree it created.
 
-Every initiative starts with five agents:
+Every initiative starts with six agents:
 
 | Agent | Default model | |
 | --- | --- | --- |
+| orchestrator | `fable` | The conversation you drive the initiative from — starts stages, funnels decisions, relays your go to dev |
 | architect | `fable` | |
 | dev | `opus` | |
 | reviewer | `fable` | |
 | qa | `fable` | Walks the feature through the real thing — scenarios, repros, regression passes |
-| generic | `sonnet` | A little helper — questions, odd jobs, anything that is not the other four |
+| generic | `sonnet` | A little helper — questions, odd jobs, anything that is not the other five |
 
-Those five are always there and cannot be removed. **Add agent** puts more alongside them, each with its own name, icon, model and startup skill; only the ones you added can be removed.
+Those six are always there and cannot be removed. **Add agent** puts more alongside them, each with its own name, icon, model and startup skill; only the ones you added can be removed.
 
 An initiative created before one of the defaults existed picks it up on the next load. A default can never be removed, so an initiative missing one only ever means it is older than that agent — there is no choice of yours to preserve. It is minted exactly as a new initiative would (built-in icon, `agentrus.models.<agent>`) and dropped into its usual place in the list, so it ends up indistinguishable from one that had it from the start.
 
@@ -151,11 +152,13 @@ Agent and shell terminals open in the panel by default; set `agentrus.terminalLo
 
 | Setting | Default | |
 | --- | --- | --- |
+| `agentrus.models.orchestrator` | `fable` | Model for new orchestrator agents |
 | `agentrus.models.architect` | `fable` | Model for new architect agents |
 | `agentrus.models.dev` | `opus` | Model for new dev agents |
 | `agentrus.models.reviewer` | `fable` | Model for new reviewer agents |
 | `agentrus.models.qa` | `fable` | Model for new QA agents |
 | `agentrus.models.generic` | `sonnet` | Model for new generic agents |
+| `agentrus.skills.orchestrator` | — | Startup skill for new orchestrator agents |
 | `agentrus.skills.architect` | — | Startup skill for new architect agents |
 | `agentrus.skills.dev` | — | Startup skill for new dev agents |
 | `agentrus.skills.reviewer` | — | Startup skill for new reviewer agents |
