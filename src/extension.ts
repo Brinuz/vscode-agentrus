@@ -1085,7 +1085,7 @@ async function createInitiative(root: string, store: Store, view: InitiativesVie
   const takenSlugs = new Map(store.all().map((i) => [slugify(i.name), i.name]));
   const name = await vscode.window.showInputBox({
     title: "New initiative",
-    prompt: "Name this initiative — it gets an architect, a dev, a reviewer and a generic agent.",
+    prompt: "Name this initiative — it gets an orchestrator, an architect, a dev, a reviewer, a QA and a generic agent.",
     placeHolder: "Auth revamp",
     validateInput: (value) => {
       const slug = slugify(value);
@@ -1204,6 +1204,19 @@ async function createInitiative(root: string, store: Store, view: InitiativesVie
 
   await store.add(name, created, settled.branch, true);
   view.refresh();
+
+  // The worktree is where the work happens; most of the time the next step is
+  // to look at it. Same move as "Open worktree in this window": the window
+  // reloads onto it, and the initiative comes up expanded there.
+  const open = await vscode.window.showInformationMessage(
+    `"${name}" is ready at ${created}. Open it in this window?`,
+    "Open in this window",
+  );
+  if (open) {
+    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(created), {
+      forceNewWindow: false,
+    });
+  }
 }
 
 /**
