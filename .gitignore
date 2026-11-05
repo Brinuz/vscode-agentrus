@@ -3,3 +3,6 @@ dist/
 out/
 *.vsix
 .DS_Store
+
+# Planning docs written by agents belong in the initiative docs folder, not the repo.
+docs/superpowers/
