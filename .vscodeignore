@@ -9,3 +9,5 @@ tsconfig.webview.json
 **/*.map
 **/*.ts
 .gitignore
+scripts/**
+docs/**

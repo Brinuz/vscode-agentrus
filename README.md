@@ -2,6 +2,10 @@
 
 A VS Code sidebar for running multiple Claude Code agents across multiple initiatives without losing track of them.
 
+<img src="docs/images/sidebar.png" alt="The Agent&quot;R&quot;Us sidebar: a &quot;Billing migration&quot; initiative open in this window, its six agents showing idle, needs you and working states, three docs and two shells, with two more initiatives collapsed below" width="400">
+
+*Sample data. The architect is waiting on a permission prompt and the dev is mid-turn. The reviewer and QA have no terminal open, so they show no state. Regenerate the image with `npm run build && scripts/readme-shots/shoot.sh`.*
+
 An **initiative** is a unit of work — "Auth revamp", "Billing migration". It holds three things:
 
 - **Agents** — Claude sessions, each pinned to a model and optionally a startup skill;
@@ -27,7 +31,7 @@ An initiative created before one of the defaults existed picks it up on the next
 
 Clicking an agent opens a terminal in that initiative's worktree and drops you into that agent's conversation — the same one as last time, with its own history. Close the terminal, come back tomorrow, click again: you land back where you left off.
 
-Initiatives start **collapsed**, except the one whose worktree this window has open — that one is also marked `· this window` on its row, so it stays identifiable once everything is expanded or collapsed again. Drag them to reorder, or use **Move up** / **Move down**.
+Initiatives start **collapsed**, except the one whose worktree this window has open — that one also carries a **this window** badge on its card, so it stays identifiable once everything is expanded or collapsed again. Drag them to reorder, or use **Move up** / **Move down**.
 
 While an agent's terminal is open, its row says whether it is **working…**, **needs you**, or **idle** — reported by the agent's own process via hooks, so a permission prompt shows up as soon as it appears. See [Working, needs you, or idle](#working-needs-you-or-idle).
 
@@ -74,9 +78,9 @@ Removing an initiative asks what to do with its docs. **Archive docs** moves the
 
 Agents are launched with `--add-dir <that folder>`, so they can read and write the docs even though the docs sit outside the working tree. Use **Reveal Docs Folder** on the Docs group to open it in Finder.
 
-The Docs group mirrors the folder: **every file in it shows up automatically**, the moment it lands there — whether you created it, dropped it in Finder, or an agent wrote it mid-conversation. There is nothing to register; deleting the file removes the entry. Files you **link** from elsewhere are the exception: those are remembered by Agent"R"Us, shown alongside the folder's files, and can be unlinked from the tree without touching the file itself.
+The Docs group mirrors the folder: **every file in it shows up automatically**, the moment it lands there — whether you created it, dropped it in Finder, or an agent wrote it mid-conversation. There is nothing to register; deleting the file removes the entry. Files you **link** from elsewhere are the exception: those are remembered by Agent"R"Us, shown alongside the folder's files, and can be unlinked from the sidebar without touching the file itself.
 
-Folder-backed docs have no "unlink" — the folder *is* the truth — so their menu offers **Reveal in Finder** and **Delete file**, the latter behind a confirmation and via the trash so it can be undone. Linked docs keep **Remove Doc**, which only forgets the link.
+Folder-backed docs have no "unlink" — the folder *is* the truth — so their right-click menu offers **Reveal in Finder** and **Delete file**, the latter behind a confirmation and via the trash so it can be undone. Linked docs instead get a **✕** button on their card, which only forgets the link.
 
 ### Working, needs you, or idle
 
@@ -89,7 +93,7 @@ While an agent's terminal is open, Agent"R"Us puts its state on the row:
 | green · `idle` | Finished; nothing pending |
 | green · `live` | Terminal is open but nothing has reported yet |
 
-Traffic lights: green is clear to take, yellow is busy, red is stopped and waiting on you. A spinning icon is the only animation VS Code gives a tree row, so it goes on *busy* — the rows in motion are the ones to leave alone, which leaves the still red bell as the thing your eye lands on. Agents keep their own icon when they are neither working nor blocked.
+Traffic lights: green is clear to take, yellow is busy, red is stopped and waiting on you. The state is a chip next to the agent's name, which keeps its own icon throughout. The only motion goes on *busy* — the spinning chips are the ones to leave alone, which leaves the still red bell as the thing your eye lands on.
 
 The state comes from the agent's own process. Each agent launches with `--settings` pointing at a small hooks file of its own, written into the extension's storage — your `~/.claude/settings.json` is never touched, and because Claude merges hook layers rather than replacing them, your own hooks keep firing alongside these. `UserPromptSubmit` → working, `Stop` → idle, `SessionEnd` clears the state, and `Notification` → `needs you`, unless its message is the after-a-while nudge rather than a real block. Each hook writes to that agent's own status file, so nothing has to map a session id back to a row; the write goes via a temp file and `mv` so the watcher never sees half of one.
 
@@ -127,7 +131,9 @@ The skill itself is yours to write — Agent"R"Us only sends the invocation.
 
 Open a folder that is a git repository, then open the Agent"R"Us view in the activity bar.
 
-Every row's **cog** opens the same actions its right-click menu offers — the two never disagree about what is available, so it does not matter which one you reach for. The cog is a menu of the lot; right-click lists them individually.
+Initiative, agent and shell cards each have a **cog** that opens the same actions their right-click menu offers — the two never disagree about what is available, so it does not matter which one you reach for. The cog is a menu of the lot; right-click lists them individually. Group and doc rows have no cog: their few actions sit as buttons on the row and in its right-click menu.
+
+**Refresh** (in the view title, next to `+`) reconciles the initiative list against `git worktree list` again and redraws the view.
 
 - **Create initiative** (`+` in the view title) — asks for a name and where it runs: the repo you have open, a new worktree, or a worktree on an existing branch. See [Creating a worktree](#creating-a-worktree). Once a worktree is ready it offers to open it in this window, the same switch as **Open worktree in this window**.
 - **Click an agent** — opens or reveals its terminal, resuming its session.
@@ -138,8 +144,8 @@ Every row's **cog** opens the same actions its right-click menu offers — the t
 - **Open worktree in new window** — for when an initiative deserves its own window.
 - **Change model** (on an agent) — takes effect the next time that agent's terminal starts.
 - **Change startup skill** (on an agent) — pick from the skills found in `~/.claude/skills/` and the repo's `.claude/skills/`, type a name, or choose "No skill". Same timing as model changes.
-- **Add doc** — a new markdown file in the docs folder, or a link to an existing file anywhere on disk. Docs themselves offer **Reveal in Finder**, plus **Delete file** for the folder-backed ones and **Remove Doc** for linked ones.
-- **New shell** / **Rename shell** / **Remove shell** — plain terminals in the initiative's directory. Renaming relabels the running terminal's tab as well as the tree row.
+- **Add doc** — a new markdown file in the docs folder, or a link to an existing file anywhere on disk. Docs themselves offer **Reveal in Finder**, plus **Delete file** for the folder-backed ones and the **✕** (remove from initiative) for linked ones.
+- **New shell** / **Rename shell** / **Remove shell** — plain terminals in the initiative's directory. Renaming relabels the running terminal's tab as well as the shell's card.
 - **Add default shells** (on the Shells group) — gives an existing initiative whatever `agentrus.defaultShells` lists, skipping any it already has.
 - **Move up** / **Move down**, or drag a row — reorders the initiative list; the order is remembered. Dropping onto any row of another initiative places it there, so you need not hit the initiative row exactly.
 - **Start fresh session** (on an agent) — deletes the conversation's transcript from disk and starts over under the same name.
@@ -182,3 +188,12 @@ npm run watch    # rebuild on change
 ```
 
 Press `F5` to launch an Extension Development Host with Agent"R"Us loaded.
+
+To install a build into your everyday VS Code:
+
+```sh
+npx @vscode/vsce package --allow-missing-repository --skip-license
+code --install-extension agentrus-<version>.vsix --force
+```
+
+An install does not hot-swap the running extension — run **Developer: Reload Window** to pick it up.

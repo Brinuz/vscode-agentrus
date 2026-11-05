@@ -6,6 +6,10 @@
   "publisher": "bmonteiro",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Brinuz/vscode-agentrus.git"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },

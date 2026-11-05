@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<!--
+  Renders the real sidebar webview (dist/webview.js + webview.css) outside VS
+  Code, fed a made-up snapshot, so the README screenshots show the actual UI
+  without anyone's real repos or branches. Run `npm run build` first, then
+  scripts/readme-shots/shoot.sh.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../dist/codicon.css" />
+    <link rel="stylesheet" href="../../dist/webview.css" />
+    <style>
+      /* VS Code "Dark Modern" values for the variables webview.css reads. */
+      :root {
+        --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", sans-serif;
+        --vscode-font-size: 13px;
+        --vscode-foreground: #cccccc;
+        --vscode-descriptionForeground: #9d9d9d;
+        --vscode-icon-foreground: #cccccc;
+        --vscode-focusBorder: #0078d4;
+        --vscode-button-background: #0078d4;
+        --vscode-button-foreground: #ffffff;
+        --vscode-button-hoverBackground: #026ec1;
+        --vscode-list-hoverBackground: #2a2d2e;
+        --vscode-toolbar-hoverBackground: rgba(90, 93, 94, 0.31);
+        --vscode-charts-blue: #3794ff;
+        --vscode-charts-green: #89d185;
+        --vscode-charts-purple: #b180d7;
+        --vscode-charts-red: #f14c4c;
+        --vscode-terminal-ansiCyan: #11a8cd;
+        --vscode-terminal-ansiYellow: #e5e510;
+      }
+      html,
+      body {
+        background: #181818;
+        color: var(--vscode-foreground);
+        font-family: var(--vscode-font-family);
+        font-size: var(--vscode-font-size);
+        margin: 0;
+      }
+      body {
+        padding: 6px 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      const agent = (role, icon, model, extra = {}) => ({
+        role,
+        icon,
+        model,
+        custom: false,
+        started: true,
+        running: false,
+        ...extra,
+      });
+
+      const snapshot = {
+        hasRepo: true,
+        currentId: "billing",
+        initiatives: [
+          {
+            id: "billing",
+            name: "Billing migration",
+            branch: "initiative/billing-migration",
+            worktreePath: "/Users/you/Workspace/acme-worktrees/billing-migration",
+            managed: true,
+            agents: [
+              agent("orchestrator", "broadcast", "fable", { skill: "orchestrator", running: true, activity: "idle" }),
+              agent("architect", "compass", "fable", { skill: "architect", running: true, activity: "needs-you" }),
+              agent("dev", "tools", "opus", { skill: "dev", running: true, activity: "working" }),
+              agent("reviewer", "search", "fable", { skill: "audit" }),
+              agent("qa", "beaker", "fable", { skill: "qa", started: false }),
+              agent("generic", "comment-discussion", "sonnet", { running: true }),
+            ],
+            docs: [
+              { name: "plan.md", path: "/docs/billing-migration/plan.md", linked: false },
+              { name: "rfc-ledger.md", path: "/docs/billing-migration/rfc-ledger.md", linked: false },
+              { name: "qa-scenarios.md", path: "/docs/billing-migration/qa-scenarios.md", linked: false },
+            ],
+            shells: [
+              { id: "s1", name: "dev server", running: true },
+              { id: "s2", name: "logs", running: false },
+            ],
+          },
+          {
+            id: "auth",
+            name: "Auth revamp",
+            branch: "initiative/auth-revamp",
+            worktreePath: "/Users/you/Workspace/acme-worktrees/auth-revamp",
+            managed: true,
+            agents: [],
+            docs: [],
+            shells: [],
+          },
+          {
+            id: "hotfix",
+            name: "Invoice rounding hotfix",
+            worktreePath: "/Users/you/Workspace/acme",
+            managed: false,
+            agents: [],
+            docs: [],
+            shells: [],
+          },
+        ],
+      };
+
+      // Stands in for the VS Code webview API: nothing to post to, and the
+      // collapsed set is seeded so only the current initiative is open.
+      window.acquireVsCodeApi = () => ({
+        postMessage(message) {
+          if (message.type === "ready") {
+            setTimeout(() => window.postMessage(snapshot, "*"));
+          }
+        },
+        getState: () => ({ collapsed: ["auth", "hotfix"] }),
+        setState() {},
+      });
+    </script>
+    <script src="../../dist/webview.js"></script>
+  </body>
+</html>
