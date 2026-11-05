@@ -119,18 +119,52 @@ export class Terminals implements vscode.Disposable {
 
   /** Close every terminal belonging to an initiative that is going away. */
   disposeInitiative(initiative: Initiative): void {
+    void this.closeInitiative(initiative, 0);
+  }
+
+  /**
+   * Close every terminal of an initiative and wait, up to `timeoutMs`, for
+   * their shells to exit. `dispose()` only asks: the shell and whatever runs
+   * in it (an agent, a dev server) hang up on their own time, and until they
+   * do they can still be writing into the worktree.
+   */
+  async closeInitiative(initiative: Initiative, timeoutMs: number): Promise<void> {
+    const pids: number[] = [];
     for (const [key, terminal] of [...this.terminals]) {
       if (key.startsWith(`${initiative.id}:`)) {
+        const pid = await Promise.race([
+          terminal.processId,
+          new Promise<undefined>((r) => setTimeout(() => r(undefined), 500)),
+        ]);
+        if (pid) {
+          pids.push(pid);
+        }
         terminal.dispose();
         this.terminals.delete(key);
       }
     }
     this.changed.fire();
+
+    const deadline = Date.now() + timeoutMs;
+    while (pids.some(alive) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
   }
 
   dispose(): void {
     this.subscription.dispose();
     this.changed.dispose();
+  }
+}
+
+/** Signal 0 checks for existence without touching the process. */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: it exists but is not ours to signal — still alive.
+    return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 }
 

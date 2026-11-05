@@ -25,11 +25,11 @@ import {
   canonical,
   currentRef,
   deleteBranch,
+  hasUncommittedWork,
   headSha,
   listBranches,
   listRemoteBranches,
   mainRepoRoot,
-  removeWorktree,
 } from "./git";
 import {
   Agent,
@@ -41,6 +41,7 @@ import {
   Shell,
   shellKey,
 } from "./model";
+import { deleteDetached, Detached, detachWorktree } from "./removal";
 import { seedWorktree } from "./seed";
 import { deleteSessions, launchCommand, sessionExists, sessionName } from "./sessions";
 import { Payload } from "./snapshot";
@@ -182,6 +183,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     return { initiative, doc };
   };
+
+  /** Initiatives with a removal in flight, from confirmation to the end. */
+  const removing = new Set<string>();
 
   const requireRoot = async (): Promise<string | undefined> => {
     const current = await findRepoRoot();
@@ -749,11 +753,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand("agentrus.removeInitiative", async (payload: Payload) => {
       const initiative = initiativeOf(payload);
-      const current = initiative && (await requireRoot());
-      if (initiative && current) {
-        await removeInitiative(context, current, initiative, store, terminals, view);
-        await resolveCurrent();
-        view.refresh();
+      if (!initiative) {
+        return;
+      }
+      // A second run against the same worktree would trip over the first.
+      if (removing.has(initiative.id)) {
+        vscode.window.showInformationMessage(`"${initiative.name}" is already being removed.`);
+        return;
+      }
+      removing.add(initiative.id);
+      try {
+        const current = await requireRoot();
+        if (current) {
+          await removeInitiative(context, current, initiative, store, terminals, view);
+          await resolveCurrent();
+          view.refresh();
+        }
+      } finally {
+        removing.delete(initiative.id);
       }
     }),
   );
@@ -1408,45 +1425,85 @@ async function removeInitiative(
     return;
   }
 
-  // Read before the worktree goes, for the archive's manifest.
-  const head = await headSha(initiative.worktreePath).catch(() => undefined);
-  terminals.disposeInitiative(initiative);
-  await removeInitiativeHookFiles(context, initiative);
-
-  try {
-    await removeWorktree(root, initiative.worktreePath, false);
-  } catch (error) {
-    // Git refuses to drop a worktree with uncommitted work, which is exactly
-    // the case where the user deserves a second look before losing it.
+  // Asked before anything is touched, and only when it is true: git can fail
+  // a removal for other reasons, and those must not be passed off as this.
+  const dirty = await hasUncommittedWork(initiative.worktreePath).catch(() => false);
+  if (dirty) {
     const force = await vscode.window.showWarningMessage(
       `The worktree for "${initiative.name}" has uncommitted changes or untracked files.`,
-      { modal: true, detail: `Git said: ${message(error)}` },
+      { modal: true, detail: "Removing it discards them." },
       "Discard them and remove",
     );
     if (force !== "Discard them and remove") {
       return;
     }
-    try {
-      await removeWorktree(root, initiative.worktreePath, true);
-    } catch (forceError) {
-      vscode.window.showErrorMessage(`Could not remove the worktree: ${message(forceError)}`);
-      return;
-    }
   }
 
-  if (confirmed === "Remove worktree and branch" && initiative.branch) {
-    try {
-      await deleteBranch(root, initiative.branch, true);
-    } catch (error) {
-      vscode.window.showWarningMessage(
-        `Worktree removed, but the branch "${initiative.branch}" is still there: ${message(error)}`,
-      );
-    }
-  }
+  const detached = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `Removing "${initiative.name}"` },
+    async (progress): Promise<Detached | undefined> => {
+      // Read before the worktree goes, for the archive's manifest.
+      const head = await headSha(initiative.worktreePath).catch(() => undefined);
 
-  await disposeDocs(context, initiative, docsChoice, head);
-  await store.remove(initiative.id);
-  view.refresh();
+      progress.report({ message: "closing its terminals…" });
+      await terminals.closeInitiative(initiative, 5000);
+      await removeInitiativeHookFiles(context, initiative);
+
+      progress.report({ message: "removing the worktree…" });
+      let result: Detached;
+      try {
+        result = await detachWorktree(root, initiative.worktreePath);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Could not remove the worktree for "${initiative.name}": ${message(error)}`,
+        );
+        return undefined;
+      }
+
+      if (confirmed === "Remove worktree and branch" && initiative.branch) {
+        try {
+          await deleteBranch(root, initiative.branch, true);
+        } catch (error) {
+          vscode.window.showWarningMessage(
+            `Worktree removed, but the branch "${initiative.branch}" is still there: ${message(error)}`,
+          );
+        }
+      }
+
+      progress.report({ message: "tidying up its docs…" });
+      await disposeDocs(context, initiative, docsChoice, head);
+      await store.remove(initiative.id);
+      view.refresh();
+      return result;
+    },
+  );
+
+  // The initiative is gone by now; what remains is only disk space, so it is
+  // reclaimed in the background with its own, quieter progress.
+  if (detached) {
+    void deleteLeftovers(initiative, detached);
+  }
+}
+
+async function deleteLeftovers(initiative: Initiative, detached: Detached): Promise<void> {
+  const left = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Window,
+      title: `Deleting the old files of "${initiative.name}"`,
+    },
+    () => deleteDetached(initiative.worktreePath, detached),
+  );
+  if (left.length === 0) {
+    return;
+  }
+  const reveal = await vscode.window.showWarningMessage(
+    `"${initiative.name}" is removed, but some of its files are still on disk: ${left.join(", ")}. ` +
+      "Something may still be writing there — a dev server or a container with a mount on it.",
+    "Reveal",
+  );
+  if (reveal === "Reveal") {
+    await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(left[0]));
+  }
 }
 
 type DocsChoice = "Archive docs" | "Delete docs" | "Nothing to keep";

@@ -146,6 +146,22 @@ export async function removeWorktree(root: string, path: string, force: boolean)
   await git(root, args);
 }
 
+/**
+ * True when `git worktree remove` would refuse: tracked changes, or untracked
+ * files that are not ignored. Asked up front so that the "discard your work?"
+ * question is only put when there is work to discard — a removal can fail for
+ * other reasons, and those must not be mistaken for this one.
+ */
+export async function hasUncommittedWork(path: string): Promise<boolean> {
+  const out = await git(path, ["status", "--porcelain"]);
+  return out.length > 0;
+}
+
+/** Forget registered worktrees whose directory is gone. */
+export async function pruneWorktrees(root: string): Promise<void> {
+  await git(root, ["worktree", "prune"]);
+}
+
 export async function deleteBranch(root: string, branch: string, force: boolean): Promise<void> {
   await git(root, ["branch", force ? "-D" : "-d", branch]);
 }

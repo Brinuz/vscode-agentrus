@@ -70,6 +70,19 @@ Two things get a word before they bite:
 
 Starting from **an existing branch** lists your local branches, marking any already checked out in another worktree as unavailable (git allows a branch in one worktree at a time). Remote-only branches are listed too and get a local tracking branch; where a local branch already exists for a remote, only the local one is offered.
 
+### Removing a worktree
+
+A worktree with `node_modules` can hold hundreds of thousands of files, and `git worktree remove` deletes every one of them before it lets go — half a minute or more. Worse, anything still writing into the tree meanwhile (a dev server, a local AWS emulator, an agent still exiting) makes git fail with `Directory not empty` *after* it has already unregistered the worktree, leaving a half-deleted folder behind.
+
+So removal goes the other way round:
+
+1. **Uncommitted work is checked first.** `git status` decides whether you are asked to discard changes, so the question only comes up when there is something to lose, and any other failure is reported as itself.
+2. **The terminals close**, and Agent"R"Us waits up to five seconds for their shells to exit, so nothing it started is still writing.
+3. **The folder is moved aside** to a hidden `.agentrus-removing-…` folder next to it, which is instant, and `git worktree prune` forgets it. The branch is deleted if you asked, the docs are archived or trashed, and the initiative leaves the sidebar.
+4. **The old files are deleted in the background**, with a spinner in the status bar. If anything is still on disk afterwards — something recreated the path, say a container with a mount on it — a warning names it, with **Reveal** to go and look.
+
+A worktree that cannot be moved (a different volume, a locked folder) falls back to `git worktree remove --force` in place. A locked worktree is put back as it was, and git's refusal is shown. Running **Remove initiative** again while one is in flight just says so.
+
 ### Docs
 
 Docs are **not** stored in your repo — there is nothing to commit and nothing to gitignore. They live in the extension's global storage, one folder per initiative, outside the worktree.
@@ -149,7 +162,7 @@ Initiative, agent and shell cards each have a **cog** that opens the same action
 - **Add default shells** (on the Shells group) — gives an existing initiative whatever `agentrus.defaultShells` lists, skipping any it already has.
 - **Move up** / **Move down**, or drag a row — reorders the initiative list; the order is remembered. Dropping onto any row of another initiative places it there, so you need not hit the initiative row exactly.
 - **Start fresh session** (on an agent) — deletes the conversation's transcript from disk and starts over under the same name.
-- **Remove initiative** — closes the terminals and removes the worktree. It refuses to discard uncommitted work without asking, and keeps the branch unless you ask it not to.
+- **Remove initiative** — closes the terminals and removes the worktree. It refuses to discard uncommitted work without asking, and keeps the branch unless you ask it not to. See [Removing a worktree](#removing-a-worktree).
 - **Extension settings** (in an initiative's cog) — jumps straight to the Agent"R"Us settings.
 
 Agent and shell terminals open in the panel by default; set `agentrus.terminalLocation` to `editor` to get them as editor tabs instead. It applies to the next terminal opened, not to ones already running.
