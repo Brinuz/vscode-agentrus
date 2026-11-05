@@ -20,6 +20,8 @@ export interface InitiativeCard {
   managed: boolean;
   agents: AgentCard[];
   docs: DocCard[];
+  /** Subfolders of the docs folder, parents before their children. */
+  docFolders: DocFolderCard[];
   shells: ShellCard[];
 }
 
@@ -42,6 +44,18 @@ export interface DocCard {
    * docs folder are not — they would reappear on the next refresh.
    */
   linked: boolean;
+  /**
+   * The docs subfolder it sits in, relative and `/`-separated; "" for the top
+   * level, which is also where linked docs show.
+   */
+  folder: string;
+}
+
+export interface DocFolderCard {
+  /** Relative to the docs folder, `/`-separated — also its collapse key. */
+  rel: string;
+  name: string;
+  path: string;
 }
 
 export interface ShellCard {

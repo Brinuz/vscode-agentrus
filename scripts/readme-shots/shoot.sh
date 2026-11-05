@@ -12,7 +12,7 @@ mkdir -p "$out"
 "$chrome" --headless=new --disable-gpu --hide-scrollbars \
   --allow-file-access-from-files \
   --force-device-scale-factor=2 \
-  --window-size=400,668 \
+  --window-size=400,860 \
   --virtual-time-budget=2000 \
   --screenshot="$out/sidebar.png" \
   "file://$here/harness.html"

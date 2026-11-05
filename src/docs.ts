@@ -27,27 +27,81 @@ export async function ensureDocsDir(
   return dir;
 }
 
+/** A file in the docs folder, and the subfolder it sits in. */
+export interface DocFile extends Doc {
+  /** Relative to the docs folder, `/`-separated; "" for the top level. */
+  folder: string;
+}
+
+/** A subfolder of the docs folder, e.g. the screenshots of one QA run. */
+export interface DocFolder {
+  /** Relative to the docs folder, `/`-separated. */
+  rel: string;
+  name: string;
+  path: string;
+}
+
+export interface DocTree {
+  files: DocFile[];
+  folders: DocFolder[];
+}
+
 /**
- * Every file currently in the initiative's docs folder. The folder IS the
- * source of truth: anything that lands there — created by the user or written
- * by an agent — shows up in the tree without being registered anywhere.
+ * Everything currently in the initiative's docs folder, subfolders included.
+ * The folder IS the source of truth: anything that lands there — created by
+ * the user or written by an agent — shows up without being registered
+ * anywhere. Dotfiles and dot-folders stay hidden at every level.
  */
-export async function listDocFiles(
+export async function listDocTree(
   context: vscode.ExtensionContext,
   initiative: Initiative,
-): Promise<Doc[]> {
-  const dir = docsDir(context, initiative);
+): Promise<DocTree> {
+  const tree: DocTree = { files: [], folders: [] };
+  await walk(docsDir(context, initiative), "", tree);
+  return tree;
+}
+
+async function walk(dir: string, rel: string, tree: DocTree): Promise<void> {
   let entries: [string, vscode.FileType][];
   try {
     entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
   } catch {
     // Not created yet: no agent has launched and no doc has been added.
-    return [];
+    return;
   }
-  return entries
-    .filter(([name, type]) => type === vscode.FileType.File && !name.startsWith("."))
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name]) => ({ id: `file:${name}`, name, path: join(dir, name) }));
+  for (const [name, type] of entries.sort(([a], [b]) => a.localeCompare(b))) {
+    if (name.startsWith(".")) {
+      continue;
+    }
+    const path = join(dir, name);
+    const childRel = rel ? `${rel}/${name}` : name;
+    if (type === vscode.FileType.Directory) {
+      tree.folders.push({ rel: childRel, name, path });
+      await walk(path, childRel, tree);
+    } else if (type === vscode.FileType.File) {
+      tree.files.push({ id: `file:${childRel}`, name, path, folder: rel });
+    }
+  }
+}
+
+/** Every file in the docs folder, at any depth. */
+export async function listDocFiles(
+  context: vscode.ExtensionContext,
+  initiative: Initiative,
+): Promise<DocFile[]> {
+  return (await listDocTree(context, initiative)).files;
+}
+
+/**
+ * The docs subfolder at `path`, or undefined if `path` is not one — a
+ * payload from the webview is only trusted once it is found in the listing.
+ */
+export async function findDocFolder(
+  context: vscode.ExtensionContext,
+  initiative: Initiative,
+  path: string,
+): Promise<DocFolder | undefined> {
+  return (await listDocTree(context, initiative)).folders.find((folder) => folder.path === path);
 }
 
 export async function hasDocs(

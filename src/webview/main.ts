@@ -1,6 +1,7 @@
 import type {
   AgentCard,
   DocCard,
+  DocFolderCard,
   InitiativeCard,
   Message,
   Payload,
@@ -14,9 +15,15 @@ declare function acquireVsCodeApi(): {
   setState(state: State): void;
 };
 
-/** Which cards the user has folded shut, by initiative id or `<id>:<group>`. */
+/**
+ * Which cards the user has folded shut, by initiative id or `<id>:<group>`,
+ * and which docs subfolders they have opened, by `<id>:docs:<rel>`. Folders
+ * are the other way round because they start shut: a QA run's folder of
+ * screenshots would otherwise push everything else off screen.
+ */
 interface State {
   collapsed: string[];
+  expanded?: string[];
 }
 
 /** Identifies an initiative card being dragged, so nothing else can be. */
@@ -25,6 +32,7 @@ const MIME = "application/vnd.agentrus.initiative";
 const api = acquireVsCodeApi();
 const root = document.getElementById("root") as HTMLElement;
 const collapsed = new Set(api.getState()?.collapsed ?? []);
+const expanded = new Set(api.getState()?.expanded ?? []);
 /** Whether the first snapshot has decided what starts folded. */
 let seeded = api.getState() !== undefined;
 
@@ -109,7 +117,7 @@ function initiativeSection(initiative: InitiativeCard, current: boolean): HTMLEl
         initiativeId: initiative.id,
       }),
     ]),
-    groupBody(initiative, "docs", initiative.docs.map((doc) => docRow(initiative, doc))),
+    groupBody(initiative, "docs", docLevel(initiative, "", 0)),
     group(initiative, "shells", "terminal", "Shells", initiative.shells.length, [
       action("add", "New shell", "agentrus.newShell", { initiativeId: initiative.id }),
     ]),
@@ -284,12 +292,103 @@ function runningTooltip(agent: AgentCard): string {
   }
 }
 
-function docRow(initiative: InitiativeCard, doc: DocCard): HTMLElement {
+/**
+ * One level of the docs folder: its subfolders first, then its files, each
+ * already sorted by name in the snapshot. Linked docs sit at the top level.
+ */
+function docLevel(initiative: InitiativeCard, rel: string, depth: number): HTMLElement[] {
+  const rows: HTMLElement[] = [];
+  for (const folder of initiative.docFolders) {
+    if (parentOf(folder.rel) === rel) {
+      rows.push(...folderRows(initiative, folder, depth));
+    }
+  }
+  for (const doc of initiative.docs) {
+    if (doc.folder === rel) {
+      rows.push(docRow(initiative, doc, depth));
+    }
+  }
+  return rows;
+}
+
+/** The folder's own row, followed by its body (shut unless opened). */
+function folderRows(initiative: InitiativeCard, folder: DocFolderCard, depth: number): HTMLElement[] {
+  const key = `${initiative.id}:docs:${folder.rel}`;
+  const open = expanded.has(key);
+  const payload: Payload = { initiativeId: initiative.id, docPath: folder.path };
+  const files = initiative.docs.filter(
+    (doc) => doc.folder === folder.rel || doc.folder.startsWith(`${folder.rel}/`),
+  ).length;
+
+  const card = el("div", "card doc-folder");
+  indent(card, depth);
+  context(card, "doc-folder", payload);
+  card.title = folder.path;
+  card.append(
+    codicon(open ? "chevron-down" : "chevron-right", "chevron"),
+    codicon(open ? "folder-opened" : "folder"),
+    el("span", "name", folder.name),
+    el("span", "count", String(files)),
+    actions([action("folder-opened", "Reveal folder in Finder", "agentrus.revealDocSubfolder", payload)]),
+  );
+
+  const body = el("div", "doc-folder-body");
+  body.append(...docLevel(initiative, folder.rel, depth + 1));
+  body.hidden = !open;
+
+  card.addEventListener("click", () => {
+    const opening = !expanded.has(key);
+    if (opening) {
+      expanded.add(key);
+    } else {
+      expanded.delete(key);
+    }
+    save();
+    body.hidden = !opening;
+    const marks = card.querySelectorAll(".codicon");
+    marks[0].className = `codicon codicon-chevron-${opening ? "down" : "right"} chevron`;
+    marks[1].className = `codicon codicon-${opening ? "folder-opened" : "folder"}`;
+  });
+  return [card, body];
+}
+
+/** Nested rows step in one icon column per level below the group's cards. */
+function indent(node: HTMLElement, depth: number): void {
+  if (depth > 0) {
+    node.style.setProperty("--indent", `calc(var(--gutter) + var(--step) * ${2 + depth})`);
+  }
+}
+
+function parentOf(rel: string): string {
+  const slash = rel.lastIndexOf("/");
+  return slash === -1 ? "" : rel.slice(0, slash);
+}
+
+/** Screenshots and run data are what QA leaves behind; say which is which. */
+function docIcon(name: string): string {
+  const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "heic"].includes(ext)) {
+    return "file-media";
+  }
+  if (["csv", "tsv", "xlsx", "xls"].includes(ext)) {
+    return "table";
+  }
+  if (ext === "json") {
+    return "json";
+  }
+  if (ext === "md") {
+    return "markdown";
+  }
+  return "file";
+}
+
+function docRow(initiative: InitiativeCard, doc: DocCard, depth: number): HTMLElement {
   const payload: Payload = { initiativeId: initiative.id, docPath: doc.path };
   const card = el("div", "card doc");
+  indent(card, depth);
   context(card, doc.linked ? "doc" : "doc-file", payload);
   card.title = doc.path;
-  card.append(codicon("file"), el("span", "name", doc.name));
+  card.append(codicon(docIcon(doc.name)), el("span", "name", doc.name));
   if (doc.name !== basename(doc.path)) {
     card.append(el("span", "detail", basename(doc.path)));
   }
@@ -406,7 +505,7 @@ function toggle(key: string, row: HTMLElement): void {
 }
 
 function save(): void {
-  api.setState({ collapsed: [...collapsed] });
+  api.setState({ collapsed: [...collapsed], expanded: [...expanded] });
 }
 
 function send(command: string, payload?: Payload): void {

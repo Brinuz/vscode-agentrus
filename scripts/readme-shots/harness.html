@@ -75,10 +75,26 @@
               agent("qa", "beaker", "fable", { skill: "qa", started: false }),
               agent("generic", "comment-discussion", "sonnet", { running: true }),
             ],
+            docFolders: [
+              { rel: "qa-runs", name: "qa-runs", path: "/docs/billing-migration/qa-runs" },
+              { rel: "qa-runs/2026-11-04", name: "2026-11-04", path: "/docs/billing-migration/qa-runs/2026-11-04" },
+              { rel: "qa-runs/2026-11-05", name: "2026-11-05", path: "/docs/billing-migration/qa-runs/2026-11-05" },
+            ],
             docs: [
-              { name: "plan.md", path: "/docs/billing-migration/plan.md", linked: false },
-              { name: "rfc-ledger.md", path: "/docs/billing-migration/rfc-ledger.md", linked: false },
-              { name: "qa-scenarios.md", path: "/docs/billing-migration/qa-scenarios.md", linked: false },
+              ...["01-invoice-list.png", "02-refund-modal.png", "03-ledger-export.png", "results.csv"].map((name) => ({
+                name,
+                path: `/docs/billing-migration/qa-runs/2026-11-05/${name}`,
+                linked: false,
+                folder: "qa-runs/2026-11-05",
+              })),
+              ...["01-invoice-list.png", "results.csv"].map((name) => ({
+                name,
+                path: `/docs/billing-migration/qa-runs/2026-11-04/${name}`,
+                linked: false,
+                folder: "qa-runs/2026-11-04",
+              })),
+              { name: "plan.md", path: "/docs/billing-migration/plan.md", linked: false, folder: "" },
+              { name: "rfc-ledger.md", path: "/docs/billing-migration/rfc-ledger.md", linked: false, folder: "" },
             ],
             shells: [
               { id: "s1", name: "dev server", running: true },
@@ -93,6 +109,7 @@
             managed: true,
             agents: [],
             docs: [],
+            docFolders: [],
             shells: [],
           },
           {
@@ -102,6 +119,7 @@
             managed: false,
             agents: [],
             docs: [],
+            docFolders: [],
             shells: [],
           },
         ],
@@ -115,7 +133,10 @@
             setTimeout(() => window.postMessage(snapshot, "*"));
           }
         },
-        getState: () => ({ collapsed: ["auth", "hotfix"] }),
+        getState: () => ({
+          collapsed: ["auth", "hotfix"],
+          expanded: ["billing:docs:qa-runs", "billing:docs:qa-runs/2026-11-05"],
+        }),
         setState() {},
       });
     </script>

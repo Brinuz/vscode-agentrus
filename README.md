@@ -2,9 +2,9 @@
 
 A VS Code sidebar for running multiple Claude Code agents across multiple initiatives without losing track of them.
 
-<img src="docs/images/sidebar.png" alt="The Agent&quot;R&quot;Us sidebar: a &quot;Billing migration&quot; initiative open in this window, its six agents showing idle, needs you and working states, three docs and two shells, with two more initiatives collapsed below" width="400">
+<img src="docs/images/sidebar.png" alt="The Agent&quot;R&quot;Us sidebar: a &quot;Billing migration&quot; initiative open in this window, its six agents showing idle, needs you and working states, docs with a qa-runs folder opened onto one day's screenshots and results.csv, and two shells, with two more initiatives collapsed below" width="400">
 
-*Sample data. The architect is waiting on a permission prompt and the dev is mid-turn. The reviewer and QA have no terminal open, so they show no state. Regenerate the image with `npm run build && scripts/readme-shots/shoot.sh`.*
+*Sample data. The architect is waiting on a permission prompt and the dev is mid-turn. The reviewer and QA have no terminal open, so they show no state. The QA agent's runs sit in a docs subfolder, one folder per day. Regenerate the image with `npm run build && scripts/readme-shots/shoot.sh`.*
 
 An **initiative** is a unit of work — "Auth revamp", "Billing migration". It holds three things:
 
@@ -91,7 +91,9 @@ Removing an initiative asks what to do with its docs. **Archive docs** moves the
 
 Agents are launched with `--add-dir <that folder>`, so they can read and write the docs even though the docs sit outside the working tree. Use **Reveal Docs Folder** on the Docs group to open it in Finder.
 
-The Docs group mirrors the folder: **every file in it shows up automatically**, the moment it lands there — whether you created it, dropped it in Finder, or an agent wrote it mid-conversation. There is nothing to register; deleting the file removes the entry. Files you **link** from elsewhere are the exception: those are remembered by Agent"R"Us, shown alongside the folder's files, and can be unlinked from the sidebar without touching the file itself.
+The Docs group mirrors the folder: **every file in it shows up automatically**, the moment it lands there — whether you created it, dropped it in Finder, or an agent wrote it mid-conversation. There is nothing to register; deleting the file removes the entry. Files you **link** from elsewhere are the exception: those are remembered by Agent"R"Us, shown alongside the folder's top-level files, and can be unlinked from the sidebar without touching the file itself.
+
+Subfolders show too, as deep as they go — a QA run's screenshots and CSVs in `qa-runs/2026-11-05/`, say. Each folder lists its subfolders first, then its files, with a count of every file beneath it. Folders start **collapsed**, so a run with forty screenshots does not push everything else off screen, and the ones you open stay open. Clicking a file opens it as VS Code would — an image in the image preview, a CSV in its editor — and screenshots, tables and markdown each get their own icon. A folder's menu offers **Reveal in Finder** and **Delete folder**, which, like deleting a file, asks first and goes to the trash. Hidden files and folders (starting with `.`) stay hidden at every level, and the Docs count is of files only.
 
 Folder-backed docs have no "unlink" — the folder *is* the truth — so their right-click menu offers **Reveal in Finder** and **Delete file**, the latter behind a confirmation and via the trash so it can be undone. Linked docs instead get a **✕** button on their card, which only forgets the link.
 
@@ -144,7 +146,7 @@ The skill itself is yours to write — Agent"R"Us only sends the invocation.
 
 Open a folder that is a git repository, then open the Agent"R"Us view in the activity bar.
 
-Initiative, agent and shell cards each have a **cog** that opens the same actions their right-click menu offers — the two never disagree about what is available, so it does not matter which one you reach for. The cog is a menu of the lot; right-click lists them individually. Group and doc rows have no cog: their few actions sit as buttons on the row and in its right-click menu.
+Initiative, agent and shell cards each have a **cog** that opens the same actions their right-click menu offers — the two never disagree about what is available, so it does not matter which one you reach for. The cog is a menu of the lot; right-click lists them individually. Group, doc and docs-folder rows have no cog: their few actions sit as buttons on the row and in its right-click menu.
 
 **Refresh** (in the view title, next to `+`) reconciles the initiative list against `git worktree list` again and redraws the view.
 
@@ -157,7 +159,7 @@ Initiative, agent and shell cards each have a **cog** that opens the same action
 - **Open worktree in new window** — for when an initiative deserves its own window.
 - **Change model** (on an agent) — takes effect the next time that agent's terminal starts.
 - **Change startup skill** (on an agent) — pick from the skills found in `~/.claude/skills/` and the repo's `.claude/skills/`, type a name, or choose "No skill". Same timing as model changes.
-- **Add doc** — a new markdown file in the docs folder, or a link to an existing file anywhere on disk. Docs themselves offer **Reveal in Finder**, plus **Delete file** for the folder-backed ones and the **✕** (remove from initiative) for linked ones.
+- **Add doc** — a new markdown file in the docs folder, or a link to an existing file anywhere on disk. Docs themselves offer **Reveal in Finder**, plus **Delete file** for the folder-backed ones and the **✕** (remove from initiative) for linked ones. Subfolders of the docs folder open and close on click, and offer **Reveal in Finder** and **Delete folder**. See [Docs](#docs).
 - **New shell** / **Rename shell** / **Remove shell** — plain terminals in the initiative's directory. Renaming relabels the running terminal's tab as well as the shell's card.
 - **Add default shells** (on the Shells group) — gives an existing initiative whatever `agentrus.defaultShells` lists, skipping any it already has.
 - **Move up** / **Move down**, or drag a row — reorders the initiative list; the order is remembered. Dropping onto any row of another initiative places it there, so you need not hit the initiative row exactly.

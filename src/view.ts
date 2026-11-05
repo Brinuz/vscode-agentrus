@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
-import { agentIcon, agentKey, Doc, Initiative, shellKey } from "./model";
+import { DocTree } from "./docs";
+import { agentIcon, agentKey, Initiative, shellKey } from "./model";
 import { DocCard, InitiativeCard, Message, Snapshot } from "./snapshot";
 import { ActivityMonitor } from "./status";
 import { Store } from "./store";
@@ -21,8 +22,8 @@ export class InitiativesViewProvider implements vscode.WebviewViewProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly store: Store,
     private readonly terminals: Terminals,
-    /** Files currently in the initiative's docs folder. */
-    private readonly docFiles: (initiative: Initiative) => Promise<Doc[]>,
+    /** Files and subfolders currently in the initiative's docs folder. */
+    private readonly docTree: (initiative: Initiative) => Promise<DocTree>,
     private readonly activity: ActivityMonitor,
     /**
      * Id of the initiative this window is open on. Resolved outside the view —
@@ -82,6 +83,7 @@ export class InitiativesViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async card(initiative: Initiative): Promise<InitiativeCard> {
+    const tree = await this.docTree(initiative);
     return {
       id: initiative.id,
       name: initiative.name,
@@ -98,7 +100,8 @@ export class InitiativesViewProvider implements vscode.WebviewViewProvider {
         running: this.terminals.isRunning(initiative, agentKey(agent)),
         activity: this.activity.get(initiative, agent),
       })),
-      docs: await this.docs(initiative),
+      docs: this.docs(initiative, tree),
+      docFolders: tree.folders.map(({ rel, name, path }) => ({ rel, name, path })),
       shells: initiative.shells.map((shell) => ({
         id: shell.id,
         name: shell.name,
@@ -113,14 +116,18 @@ export class InitiativesViewProvider implements vscode.WebviewViewProvider {
    * the folder (docs created before folder listing existed) is shadowed by
    * the folder's own entry rather than shown twice.
    */
-  private async docs(initiative: Initiative): Promise<DocCard[]> {
-    const files = await this.docFiles(initiative);
-    const filePaths = new Set(files.map((doc) => doc.path));
+  private docs(initiative: Initiative, tree: DocTree): DocCard[] {
+    const filePaths = new Set(tree.files.map((doc) => doc.path));
     return [
-      ...files.map((doc) => ({ name: doc.name, path: doc.path, linked: false })),
+      ...tree.files.map((doc) => ({
+        name: doc.name,
+        path: doc.path,
+        linked: false,
+        folder: doc.folder,
+      })),
       ...initiative.docs
         .filter((doc) => !filePaths.has(doc.path))
-        .map((doc) => ({ name: doc.name, path: doc.path, linked: true })),
+        .map((doc) => ({ name: doc.name, path: doc.path, linked: true, folder: "" })),
     ];
   }
 

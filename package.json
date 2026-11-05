@@ -189,6 +189,16 @@
         "command": "agentrus.deleteDocFile",
         "title": "Agent\"R\"Us: Delete Doc File",
         "icon": "$(trash)"
+      },
+      {
+        "command": "agentrus.revealDocSubfolder",
+        "title": "Agent\"R\"Us: Reveal Folder in Finder",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "agentrus.deleteDocSubfolder",
+        "title": "Agent\"R\"Us: Delete Folder",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -334,6 +344,16 @@
           "command": "agentrus.deleteDocFile",
           "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'doc-file'",
           "group": "2_remove@1"
+        },
+        {
+          "command": "agentrus.revealDocSubfolder",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'doc-folder'",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "agentrus.deleteDocSubfolder",
+          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'doc-folder'",
+          "group": "2_remove@1"
         }
       ],
       "commandPalette": [
@@ -439,6 +459,14 @@
         },
         {
           "command": "agentrus.deleteDocFile",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.revealDocSubfolder",
+          "when": "false"
+        },
+        {
+          "command": "agentrus.deleteDocSubfolder",
           "when": "false"
         }
       ]

@@ -5,12 +5,15 @@ import * as vscode from "vscode";
 import {
   archiveDocs,
   archiveRoot,
+  DocFolder,
   docsDir,
   ensureArchiveRoot,
   ensureDocsDir,
+  findDocFolder,
   hasDocs,
   listArchives,
   listDocFiles,
+  listDocTree,
   MANIFEST,
   trashDocs,
 } from "./docs";
@@ -84,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.extensionUri,
     store,
     terminals,
-    (initiative) => listDocFiles(context, initiative),
+    (initiative) => listDocTree(context, initiative),
     activity,
     () => currentId,
     root !== undefined,
@@ -182,6 +185,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       return undefined;
     }
     return { initiative, doc };
+  };
+
+  /** A docs subfolder named by a payload, only if the listing really has it. */
+  const docFolderOf = async (
+    payload: Payload,
+  ): Promise<{ initiative: Initiative; folder: DocFolder } | undefined> => {
+    const initiative = initiativeOf(payload);
+    if (!initiative || !payload.docPath) {
+      return undefined;
+    }
+    const folder = await findDocFolder(context, initiative, payload.docPath);
+    if (!folder) {
+      view.refresh();
+      return undefined;
+    }
+    return { initiative, folder };
   };
 
   /** Initiatives with a removal in flight, from confirmation to the end. */
@@ -737,6 +756,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       // The docs watcher refreshes the view by itself, but not before the
       // command returns.
+      view.refresh();
+    }),
+
+    vscode.commands.registerCommand("agentrus.revealDocSubfolder", async (payload: Payload) => {
+      const found = await docFolderOf(payload);
+      if (found) {
+        await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(found.folder.path));
+      }
+    }),
+
+    // Same footing as deleting a file: the folder is the truth, so removing
+    // it from the view means removing it from disk — behind a modal, to the
+    // trash.
+    vscode.commands.registerCommand("agentrus.deleteDocSubfolder", async (payload: Payload) => {
+      const found = await docFolderOf(payload);
+      if (!found) {
+        return;
+      }
+      const { folder } = found;
+      const confirmed = await vscode.window.showWarningMessage(
+        `Delete the folder "${folder.rel}" and everything in it?`,
+        {
+          modal: true,
+          detail: `This deletes ${folder.path}. It goes to the trash, so it can be recovered from there.`,
+        },
+        "Delete folder",
+      );
+      if (confirmed !== "Delete folder") {
+        return;
+      }
+      try {
+        await vscode.workspace.fs.delete(vscode.Uri.file(folder.path), {
+          recursive: true,
+          useTrash: true,
+        });
+      } catch (error) {
+        vscode.window.showErrorMessage(`Could not delete the folder: ${message(error)}`);
+        return;
+      }
       view.refresh();
     }),
 
