@@ -68,12 +68,12 @@
             worktreePath: "/Users/you/Workspace/acme-worktrees/billing-migration",
             managed: true,
             agents: [
-              agent("orchestrator", "broadcast", "fable", { skill: "orchestrator", running: true, activity: "idle" }),
-              agent("architect", "compass", "fable", { skill: "architect", running: true, activity: "needs-you" }),
+              agent("orchestrator", "broadcast", "opus", { skill: "orchestrator", running: true, activity: "idle" }),
+              agent("architect", "compass", "opus", { skill: "architect", running: true, activity: "needs-you" }),
               agent("dev", "tools", "opus", { skill: "dev", running: true, activity: "working" }),
-              agent("reviewer", "search", "fable", { skill: "audit" }),
-              agent("qa", "beaker", "fable", { skill: "qa", started: false }),
-              agent("generic", "comment-discussion", "sonnet", { running: true }),
+              agent("reviewer", "search", "opus", { skill: "audit" }),
+              agent("qa", "beaker", "opus", { skill: "qa", started: false }),
+              agent("generic", "comment-discussion", "opus", { running: true }),
             ],
             docFolders: [
               { rel: "qa-runs", name: "qa-runs", path: "/docs/billing-migration/qa-runs" },

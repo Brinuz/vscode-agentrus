@@ -947,7 +947,7 @@ async function addAgent(initiative: Initiative, store: Store, view: InitiativesV
   const model = await vscode.window.showQuickPick(
     KNOWN_MODELS.map((known) => ({
       label: known,
-      description: known === "sonnet" ? "default" : undefined,
+      description: known === "opus" ? "default" : undefined,
     })),
     { title: `Model for ${name}` },
   );

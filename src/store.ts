@@ -310,11 +310,11 @@ function rankOf(role: Role): number {
 
 /**
  * Only the default agents have a configured model; one the user added by hand
- * has no setting to read, so it falls back to sonnet.
+ * has no setting to read, so it falls back to opus like the defaults do.
  */
 export function defaultModel(role: Role): string {
   const config = vscode.workspace.getConfiguration("agentrus");
-  return config.get<string>(`models.${role}`) || "sonnet";
+  return config.get<string>(`models.${role}`) || "opus";
 }
 
 export function defaultSkill(role: Role): string | undefined {

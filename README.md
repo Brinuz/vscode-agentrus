@@ -18,12 +18,12 @@ Every initiative starts with six agents:
 
 | Agent | Default model | |
 | --- | --- | --- |
-| orchestrator | `fable` | The conversation you drive the initiative from — starts stages, funnels decisions, relays your go to dev |
-| architect | `fable` | |
+| orchestrator | `opus` | The conversation you drive the initiative from — starts stages, funnels decisions, relays your go to dev |
+| architect | `opus` | |
 | dev | `opus` | |
-| reviewer | `fable` | |
-| qa | `fable` | Walks the feature through the real thing — scenarios, repros, regression passes |
-| generic | `sonnet` | A little helper — questions, odd jobs, anything that is not the other five |
+| reviewer | `opus` | |
+| qa | `opus` | Walks the feature through the real thing — scenarios, repros, regression passes |
+| generic | `opus` | A little helper — questions, odd jobs, anything that is not the other five |
 
 Those six are always there and cannot be removed. **Add agent** puts more alongside them, each with its own name, icon, model and startup skill; only the ones you added can be removed.
 
@@ -173,12 +173,12 @@ Agent and shell terminals open in the panel by default; set `agentrus.terminalLo
 
 | Setting | Default | |
 | --- | --- | --- |
-| `agentrus.models.orchestrator` | `fable` | Model for new orchestrator agents |
-| `agentrus.models.architect` | `fable` | Model for new architect agents |
+| `agentrus.models.orchestrator` | `opus` | Model for new orchestrator agents |
+| `agentrus.models.architect` | `opus` | Model for new architect agents |
 | `agentrus.models.dev` | `opus` | Model for new dev agents |
-| `agentrus.models.reviewer` | `fable` | Model for new reviewer agents |
-| `agentrus.models.qa` | `fable` | Model for new QA agents |
-| `agentrus.models.generic` | `sonnet` | Model for new generic agents |
+| `agentrus.models.reviewer` | `opus` | Model for new reviewer agents |
+| `agentrus.models.qa` | `opus` | Model for new QA agents |
+| `agentrus.models.generic` | `opus` | Model for new generic agents |
 | `agentrus.skills.orchestrator` | — | Startup skill for new orchestrator agents |
 | `agentrus.skills.architect` | — | Startup skill for new architect agents |
 | `agentrus.skills.dev` | — | Startup skill for new dev agents |

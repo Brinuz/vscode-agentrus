@@ -476,12 +476,12 @@
       "properties": {
         "agentrus.models.orchestrator": {
           "type": "string",
-          "default": "fable",
+          "default": "opus",
           "description": "Model alias used for new orchestrator agents — the conversation you drive an initiative from."
         },
         "agentrus.models.architect": {
           "type": "string",
-          "default": "fable",
+          "default": "opus",
           "description": "Model alias used for new architect agents."
         },
         "agentrus.models.dev": {
@@ -491,17 +491,17 @@
         },
         "agentrus.models.reviewer": {
           "type": "string",
-          "default": "fable",
+          "default": "opus",
           "description": "Model alias used for new reviewer agents."
         },
         "agentrus.models.qa": {
           "type": "string",
-          "default": "fable",
+          "default": "opus",
           "description": "Model alias used for new QA agents."
         },
         "agentrus.models.generic": {
           "type": "string",
-          "default": "sonnet",
+          "default": "opus",
           "description": "Model alias used for new generic agents — the little helper for questions and odd jobs."
         },
         "agentrus.skills.orchestrator": {
