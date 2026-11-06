@@ -1,57 +1,80 @@
 # Agent"R"Us
 
-A VS Code sidebar for running multiple Claude Code agents across multiple initiatives without losing track of them.
+A VS Code sidebar for running several Claude Code agents across several pieces of work without losing track of them.
 
 <img src="docs/images/sidebar.png" alt="The Agent&quot;R&quot;Us sidebar: a &quot;Billing migration&quot; initiative open in this window, its six agents showing idle, needs you and working states, docs with a qa-runs folder opened onto one day's screenshots and results.csv, and two shells, with two more initiatives collapsed below" width="400">
 
-*Sample data. The architect is waiting on a permission prompt and the dev is mid-turn. The reviewer and QA have no terminal open, so they show no state. The QA agent's runs sit in a docs subfolder, one folder per day. Regenerate the image with `npm run build && scripts/readme-shots/shoot.sh`.*
+*Sample data. Regenerate with `npm run build && scripts/readme-shots/shoot.sh`.*
 
-An **initiative** is a unit of work — "Auth revamp", "Billing migration". It holds three things:
+## Initiatives
 
-- **Agents** — Claude sessions, each pinned to a model and optionally a startup skill;
-- **Docs** — notes that belong to the initiative, kept out of the repo;
-- **Shells** — plain terminals in the initiative's directory, no Claude attached.
+An **initiative** is a unit of work ("Auth revamp", "Billing migration"). Each one has:
 
-When you create an initiative you choose where it runs: **in the repo you have open**, in **a git worktree of its own** on a new branch, or in a worktree on **a branch you already have** — so that parallel initiatives never touch each other's files. Agent"R"Us only ever deletes a worktree it created.
+- **Agents**: Claude sessions, each with a model and an optional startup skill.
+- **Docs**: notes for the initiative, kept outside the repo.
+- **Shells**: plain terminals in the initiative's directory.
 
-Every initiative starts with six agents:
+It runs in one of three places:
 
-| Agent | Default model | |
-| --- | --- | --- |
-| orchestrator | `opus` | The conversation you drive the initiative from — starts stages, funnels decisions, relays your go to dev |
-| architect | `opus` | |
-| dev | `opus` | |
-| reviewer | `opus` | |
-| qa | `opus` | Walks the feature through the real thing — scenarios, repros, regression passes |
-| generic | `opus` | A little helper — questions, odd jobs, anything that is not the other five |
+- the repo you have open;
+- a new git worktree on a new branch;
+- a worktree on a branch you already have.
 
-Those six are always there and cannot be removed. **Add agent** puts more alongside them, each with its own name, icon, model and startup skill; only the ones you added can be removed.
+Worktrees keep parallel initiatives out of each other's files. Agent"R"Us only ever deletes worktrees it created.
 
-An initiative created before one of the defaults existed picks it up on the next load. A default can never be removed, so an initiative missing one only ever means it is older than that agent — there is no choice of yours to preserve. It is minted exactly as a new initiative would (built-in icon, `agentrus.models.<agent>`) and dropped into its usual place in the list, so it ends up indistinguishable from one that had it from the start.
+## Agents
 
-Clicking an agent opens a terminal in that initiative's worktree and drops you into that agent's conversation — the same one as last time, with its own history. Close the terminal, come back tomorrow, click again: you land back where you left off.
+Every initiative starts with six agents, all on `opus` by default:
 
-Initiatives start **collapsed**, except the one whose worktree this window has open — that one also carries a **this window** badge on its card, so it stays identifiable once everything is expanded or collapsed again. Drag them to reorder, or use **Move up** / **Move down**.
+| Agent | Role |
+| --- | --- |
+| orchestrator | Drives the initiative: starts stages, collects decisions, relays your go to dev |
+| architect | Design and planning |
+| dev | Implementation |
+| reviewer | Code review |
+| qa | Walks the feature through for real: scenarios, repros, regression passes |
+| generic | Questions and odd jobs |
 
-While an agent's terminal is open, its row says whether it is **working…**, **needs you**, or **idle** — reported by the agent's own process via hooks, so a permission prompt shows up as soon as it appears. See [Working, needs you, or idle](#working-needs-you-or-idle).
+- The six defaults can't be removed. **Add agent** adds more, and only those can be removed.
+- An initiative created before a default existed gets it on the next load.
+- Clicking an agent opens its terminal and resumes its conversation where you left off.
 
-## How it works
+### Status
 
-Each agent's conversation is named `{initiative}-{agent}` — `Auth revamp-architect`. Agent"R"Us creates it with `claude --name <name>` and gets back into it with `claude --resume <name>`, so the same name you see in the sidebar is the one in the terminal tab, in Claude's prompt box, and in its `/resume` picker.
+While an agent's terminal is open, its card shows a status chip:
 
-Whether a click creates or resumes is decided by looking at Claude's transcripts on disk: if a conversation with that name exists for that directory, resume it, otherwise create it. Resuming a name with nothing behind it would open Claude's session picker and silently drop the startup skill, so guessing is not an option.
+| Chip | Meaning |
+| --- | --- |
+| red bell · `needs you` | Waiting on a permission prompt or a question |
+| yellow spinner · `working…` | Mid-turn |
+| green · `idle` | Finished, nothing pending |
+| green · `live` | Terminal open, nothing reported yet |
 
-The name deliberately leaves out the model, so switching an agent from `fable` to `opus` keeps its conversation instead of renaming it out of reach. "Start fresh" deletes the conversation's transcript from disk, so the next launch starts over under the same name.
+- Status comes from Claude hooks, via a per-agent `--settings` file. Your `~/.claude/settings.json` is never touched.
+- Approving a permission prompt fires no hook, so `needs you` clears on the next tool activity. A long tool run right after approval stays on `needs you` until it finishes.
+- Agents without hook state (older conversations) fall back to reading the transcript, every `agentrus.activityPollSeconds`.
+- Only terminals open in this window are tracked.
 
-An initiative's name is load-bearing: it names the docs folder (`slugify(name)`) and every agent's conversation. Two initiatives whose names differ only by punctuation would slugify the same and quietly share one docs folder, so **a name that collides with an existing one is refused at creation**, naming the initiative it clashes with.
+### Startup skills
 
-Git is the source of truth for worktrees. On startup Agent"R"Us reconciles its list against `git worktree list`, so a worktree you removed by hand disappears from the sidebar instead of lingering as a dead entry. Initiatives that just use the repo as-is are never pruned this way.
+- A startup skill is a Claude Code skill from `~/.claude/skills/` or the repo's `.claude/skills/`.
+- Every launch, first start and resume alike, sends `/<skill> docs-dir: <the initiative's docs folder>` as the first message, so the skill can write into the initiative's docs.
+- An agent with no skill is asked once on first launch. "No skill" is remembered.
+- Set `agentrus.skills.<agent>` to skip the question for new agents.
 
-Creating a worktree also copies over the untracked config files listed in `agentrus.copyToWorktree` (by default `.env`), since `git worktree add` only materializes tracked files.
+### Sessions
 
-### Creating a worktree
+- Each conversation is named `{initiative}-{agent}`, e.g. `Auth revamp-architect`. The same name shows in the sidebar, the terminal tab and Claude's `/resume` picker.
+- Whether a click starts or resumes a conversation is decided from Claude's transcripts on disk.
+- Changing an agent's model keeps its conversation.
+- **Start fresh session** deletes the transcript, so the agent starts over under the same name.
+- Initiative names must be unique. Names that differ only in punctuation count as the same.
 
-Nothing is created until you have seen it. Choosing a worktree brings up a review step:
+## Worktrees
+
+### Creating
+
+Choosing a worktree shows a review step before anything is created:
 
 ```
 $(git-branch) Branch      initiative/auth-revamp
@@ -61,139 +84,75 @@ $(git-commit) Base ref    main
 $(check) Create worktree
 ```
 
-Pick a row to change it. The branch and directory start out coupled — renaming the branch moves the directory with it — until you set a directory yourself, after which it stays put.
+- Pick a row to change it. The directory follows the branch name until you set it yourself.
+- It warns about a directory that already exists and isn't empty, or one inside the repo.
+- **Existing branch** lists local and remote branches. Branches already checked out in another worktree are marked unavailable.
+- Untracked files in `agentrus.copyToWorktree` (default `.env`) are copied in.
+- Once the worktree is ready, it offers to open it in this window.
 
-Two things get a word before they bite:
+### Removing
 
-- a directory that **already exists and is not empty**, which git would refuse anyway;
-- a directory **inside the repository**, which git allows without complaint. The result is a whole checkout sitting untracked in your working tree, which `git add -A`, a linter, or the `copyToWorktree` step would all descend into. You can proceed — a gitignored subfolder is a reasonable thing to want — but not by accident.
+- Uncommitted or untracked work gets a "discard?" prompt, and only then.
+- The initiative's terminals close first, and their shells get up to five seconds to exit.
+- The folder is moved aside and pruned from git, so the initiative disappears at once. The branch is deleted if you asked.
+- The old files are deleted in the background. Anything left on disk is reported, with **Reveal**.
+- On startup, worktrees you deleted by hand drop out of the sidebar.
 
-Starting from **an existing branch** lists your local branches, marking any already checked out in another worktree as unavailable (git allows a branch in one worktree at a time). Remote-only branches are listed too and get a local tracking branch; where a local branch already exists for a remote, only the local one is offered.
+## Docs
 
-### Removing a worktree
+- Each initiative's docs live in the extension's storage, not in your repo. Agents get access through `--add-dir`.
+- Every file in the folder shows up automatically, including ones agents write.
+- **Subfolders** show as collapsible rows (QA runs with screenshots and CSVs, for example). They start collapsed and remember being opened.
+- Screenshots, tables and Markdown files each get their own icon. Clicking opens the file in VS Code.
+- Files and folders: **Reveal in Finder**, and **Delete** (asks first, goes to the trash).
+- **Linked docs** are files from anywhere on disk. The **✕** only forgets the link.
+- Hidden files and folders (names starting with `.`) stay hidden.
 
-A worktree with `node_modules` can hold hundreds of thousands of files, and `git worktree remove` deletes every one of them before it lets go — half a minute or more. Worse, anything still writing into the tree meanwhile (a dev server, a local AWS emulator, an agent still exiting) makes git fail with `Directory not empty` *after* it has already unregistered the worktree, leaving a half-deleted folder behind.
+Removing an initiative asks what to do with its docs:
 
-So removal goes the other way round:
+- **Archive docs**: moves them to `archive/`, with an `ARCHIVE.md` noting branch, commit, agents and sessions. An `INDEX.md` lists every archive.
+- **Delete docs**: sends them to the trash.
 
-1. **Uncommitted work is checked first.** `git status` decides whether you are asked to discard changes, so the question only comes up when there is something to lose, and any other failure is reported as itself.
-2. **The terminals close**, and Agent"R"Us waits up to five seconds for their shells to exit, so nothing it started is still writing.
-3. **The folder is moved aside** to a hidden `.agentrus-removing-…` folder next to it, which is instant, and `git worktree prune` forgets it. The branch is deleted if you asked, the docs are archived or trashed, and the initiative leaves the sidebar.
-4. **The old files are deleted in the background**, with a spinner in the status bar. If anything is still on disk afterwards — something recreated the path, say a container with a mount on it — a warning names it, with **Reveal** to go and look.
-
-A worktree that cannot be moved (a different volume, a locked folder) falls back to `git worktree remove --force` in place. A locked worktree is put back as it was, and git's refusal is shown. Running **Remove initiative** again while one is in flight just says so.
-
-### Docs
-
-Docs are **not** stored in your repo — there is nothing to commit and nothing to gitignore. They live in the extension's global storage, one folder per initiative, outside the worktree.
-
-Removing an initiative asks what to do with its docs. **Archive docs** moves the folder into an `archive/` folder next to the docs, with an `ARCHIVE.md` recording the branch, last commit, worktree, agents and their session names, and linked docs. An `INDEX.md` at the archive root lists every archived initiative, so one path is enough to hand an agent. **Delete docs** sends the folder to the trash. Linked files outside the folder are never deleted either way. An initiative with no docs is removed without asking. Run **Agent"R"Us: Open Archived Docs** from the command palette to pick an archived initiative and open one of its files, or **Agent"R"Us: Copy Archive Path** to get the archive's location.
-
-Agents are launched with `--add-dir <that folder>`, so they can read and write the docs even though the docs sit outside the working tree. Use **Reveal Docs Folder** on the Docs group to open it in Finder.
-
-The Docs group mirrors the folder: **every file in it shows up automatically**, the moment it lands there — whether you created it, dropped it in Finder, or an agent wrote it mid-conversation. There is nothing to register; deleting the file removes the entry. Files you **link** from elsewhere are the exception: those are remembered by Agent"R"Us, shown alongside the folder's top-level files, and can be unlinked from the sidebar without touching the file itself.
-
-Subfolders show too, as deep as they go — a QA run's screenshots and CSVs in `qa-runs/2026-11-05/`, say. Each folder lists its subfolders first, then its files, with a count of every file beneath it. Folders start **collapsed**, so a run with forty screenshots does not push everything else off screen, and the ones you open stay open. Clicking a file opens it as VS Code would — an image in the image preview, a CSV in its editor — and screenshots, tables and markdown each get their own icon. A folder's menu offers **Reveal in Finder** and **Delete folder**, which, like deleting a file, asks first and goes to the trash. Hidden files and folders (starting with `.`) stay hidden at every level, and the Docs count is of files only.
-
-Folder-backed docs have no "unlink" — the folder *is* the truth — so their right-click menu offers **Reveal in Finder** and **Delete file**, the latter behind a confirmation and via the trash so it can be undone. Linked docs instead get a **✕** button on their card, which only forgets the link.
-
-### Working, needs you, or idle
-
-While an agent's terminal is open, Agent"R"Us puts its state on the row:
-
-| | |
-| --- | --- |
-| red bell · `needs you` | Blocked on you — a permission prompt or a question. This is the row to click |
-| yellow spinner · `working…` | Mid-turn, leave it alone |
-| green · `idle` | Finished; nothing pending |
-| green · `live` | Terminal is open but nothing has reported yet |
-
-Traffic lights: green is clear to take, yellow is busy, red is stopped and waiting on you. The state is a chip next to the agent's name, which keeps its own icon throughout. The only motion goes on *busy* — the spinning chips are the ones to leave alone, which leaves the still red bell as the thing your eye lands on.
-
-The state comes from the agent's own process. Each agent launches with `--settings` pointing at a small hooks file of its own, written into the extension's storage — your `~/.claude/settings.json` is never touched, and because Claude merges hook layers rather than replacing them, your own hooks keep firing alongside these. `UserPromptSubmit` → working, `Stop` → idle, `SessionEnd` clears the state, and `Notification` → `needs you`, unless its message is the after-a-while nudge rather than a real block. Each hook writes to that agent's own status file, so nothing has to map a session id back to a row; the write goes via a temp file and `mv` so the watcher never sees half of one.
-
-Three more — `PreToolUse`, `PostToolUse` and `PostToolUseFailure` — also mean working, and are the only ones running per tool call rather than once a turn. They pay for themselves: **approving a permission prompt fires no event at all**, so tool activity is the only evidence Claude emits that the block cleared. All three are needed because none covers every tool call on its own: a tool refused by a permission rule fires only `PreToolUse`, and a tool that *fails* fires `PostToolUseFailure` **instead of** `PostToolUse`, not alongside it.
-
-One gap is structural rather than an oversight: `PreToolUse` fires *before* the permission gate, so between approving a prompt and the tool finishing, Claude emits nothing. A tool that runs for minutes leaves the row saying `needs you` until it completes.
-
-`needs you` is why hooks are needed at all rather than more transcript reading: a tool that is running and a tool stopped at a permission prompt are the same thing in a transcript — a `tool_use` with no result — so the difference simply is not written down anywhere.
-
-**The transcript fallback.** Agents whose conversation started before hooks existed, or whose status file is gone, still get working-vs-idle read from the transcript. That verdict comes from the shape of the last message: an assistant message that stopped for a tool call is waiting on that tool, and while the tool runs nothing is written at all — so a ten-minute test suite would look exactly like an idle agent if timestamps were all we had. Trailing metadata records (titles, modes, attachments) are skipped to find the last real message, and an `[Request interrupted by user]` marker — what Esc leaves behind — means stopped, whatever its age.
-
-Staleness is a sanity check on top, measured from the **message's own timestamp**, not the file's. Those differ by a lot: Claude appends metadata records for hours after a conversation ends, which drags the file's timestamp forward while nothing is being said. The two windows — 2 minutes while generating a reply, 30 minutes while waiting on a tool — were measured against real transcripts, where the 99th percentile of each gap is 65 seconds and 220 seconds respectively.
-
-Only agents whose terminal is open **in this window** are watched, and polling stops entirely when none are — hook-backed agents are never polled at all, since their state arrives as it happens. Terminals are per-window, so an agent working in a worktree window shows no state in the repo window. `agentrus.activityPollSeconds` sets the fallback interval; `0` switches it off, leaving hook-backed agents reporting and everything else on `live`.
-
-### Startup skills
-
-An agent can be given a **startup skill** — the name of a Claude Code skill (from `~/.claude/skills/` or the repo's `.claude/skills/`) that defines how that agent behaves: its role, its process, where to put things.
-
-When set, every launch of that agent — first start and resume alike — begins by sending
-
-```
-/<skill> docs-dir: <the initiative's docs folder>
-```
-
-as the first message. The skill loads its instructions into the conversation, and the initiative's docs folder rides along as its argument, so a skill that honors `docs-dir` writes its plans, notes and findings into the initiative's shared docs instead of the repo. Re-sending it on resume re-briefs the agent after long sessions; the cost is that reopening a closed terminal always triggers a turn.
-
-An agent with no skill set is **asked once**, the first time you launch it. Answering "No skill" counts as an answer, so it never asks that agent again — change it later with **Change startup skill**. Set `agentrus.skills.*` and new agents are never asked at all.
-
-Dismissing that prompt cancels the launch. During **Open all agents** it cancels the whole batch, so one Esc backs out rather than one per agent.
-
-The skill itself is yours to write — Agent"R"Us only sends the invocation.
+Browse old archives with **Agent"R"Us: Open Archived Docs** or **Copy Archive Path** from the command palette.
 
 ## Usage
 
-Open a folder that is a git repository, then open the Agent"R"Us view in the activity bar.
+Open a git repository, then the Agent"R"Us view in the activity bar.
 
-Initiative, agent and shell cards each have a **cog** that opens the same actions their right-click menu offers — the two never disagree about what is available, so it does not matter which one you reach for. The cog is a menu of the lot; right-click lists them individually. Group, doc and docs-folder rows have no cog: their few actions sit as buttons on the row and in its right-click menu.
+- Initiative, agent and shell cards have a **cog** with the same actions as their right-click menu.
+- **`+`** creates an initiative. **Refresh** re-checks worktrees against git.
+- Initiatives start collapsed, except the one this window is open on, which carries a **this window** badge.
+- Reorder initiatives by dragging, or with **Move up** / **Move down**.
 
-**Refresh** (in the view title, next to `+`) reconciles the initiative list against `git worktree list` again and redraws the view.
-
-- **Create initiative** (`+` in the view title) — asks for a name and where it runs: the repo you have open, a new worktree, or a worktree on an existing branch. See [Creating a worktree](#creating-a-worktree). Once a worktree is ready it offers to open it in this window, the same switch as **Open worktree in this window**.
-- **Click an agent** — opens or reveals its terminal, resuming its session.
-- **Open all agents** (on an initiative or its Agents group) — brings up all of them at once; Esc during a skill prompt backs out of the whole batch.
-- **Add agent** — a missing default as a one-click preset, or a new agent you name, icon, model and skill yourself.
-- **Remove agent** — only for agents you added. Its transcript stays on disk, so adding the same name back later resumes that conversation; run **Start fresh session** first if you want it gone for good.
-- **Open worktree in this window** — switches the window to the worktree so the Explorer shows the initiative's real files. The sidebar shows the same initiatives there: they are keyed to the repo, not to the folder you happen to have open. Terminals do not survive the switch, but conversations resume on the next click — and the initiative you switched to is the one that comes up expanded.
-- **Open worktree in new window** — for when an initiative deserves its own window.
-- **Change model** (on an agent) — takes effect the next time that agent's terminal starts.
-- **Change startup skill** (on an agent) — pick from the skills found in `~/.claude/skills/` and the repo's `.claude/skills/`, type a name, or choose "No skill". Same timing as model changes.
-- **Add doc** — a new markdown file in the docs folder, or a link to an existing file anywhere on disk. Docs themselves offer **Reveal in Finder**, plus **Delete file** for the folder-backed ones and the **✕** (remove from initiative) for linked ones. Subfolders of the docs folder open and close on click, and offer **Reveal in Finder** and **Delete folder**. See [Docs](#docs).
-- **New shell** / **Rename shell** / **Remove shell** — plain terminals in the initiative's directory. Renaming relabels the running terminal's tab as well as the shell's card.
-- **Add default shells** (on the Shells group) — gives an existing initiative whatever `agentrus.defaultShells` lists, skipping any it already has.
-- **Move up** / **Move down**, or drag a row — reorders the initiative list; the order is remembered. Dropping onto any row of another initiative places it there, so you need not hit the initiative row exactly.
-- **Start fresh session** (on an agent) — deletes the conversation's transcript from disk and starts over under the same name.
-- **Remove initiative** — closes the terminals and removes the worktree. It refuses to discard uncommitted work without asking, and keeps the branch unless you ask it not to. See [Removing a worktree](#removing-a-worktree).
-- **Extension settings** (in an initiative's cog) — jumps straight to the Agent"R"Us settings.
-
-Agent and shell terminals open in the panel by default; set `agentrus.terminalLocation` to `editor` to get them as editor tabs instead. It applies to the next terminal opened, not to ones already running.
+| Action | Where | |
+| --- | --- | --- |
+| Open all agents | initiative, Agents group | Esc on a skill prompt cancels the batch |
+| Add agent | initiative, Agents group | A missing default, or one you name yourself |
+| Remove agent | agent you added | Keeps the transcript, so re-adding resumes it |
+| Change model / startup skill | agent | Applies on the next launch |
+| Start fresh session | agent | Deletes the transcript |
+| Open worktree in this / new window | initiative | Conversations resume on the next click |
+| Add doc | initiative, Docs group | New Markdown file or a link to one |
+| New shell | initiative, Shells group | |
+| Rename / Remove shell | shell | |
+| Add default shells | Shells group | Adds `agentrus.defaultShells` |
+| Remove initiative | initiative | See [Removing](#removing) |
 
 ## Settings
 
 | Setting | Default | |
 | --- | --- | --- |
-| `agentrus.models.orchestrator` | `opus` | Model for new orchestrator agents |
-| `agentrus.models.architect` | `opus` | Model for new architect agents |
-| `agentrus.models.dev` | `opus` | Model for new dev agents |
-| `agentrus.models.reviewer` | `opus` | Model for new reviewer agents |
-| `agentrus.models.qa` | `opus` | Model for new QA agents |
-| `agentrus.models.generic` | `opus` | Model for new generic agents |
-| `agentrus.skills.orchestrator` | — | Startup skill for new orchestrator agents |
-| `agentrus.skills.architect` | — | Startup skill for new architect agents |
-| `agentrus.skills.dev` | — | Startup skill for new dev agents |
-| `agentrus.skills.reviewer` | — | Startup skill for new reviewer agents |
-| `agentrus.skills.qa` | — | Startup skill for new QA agents |
-| `agentrus.skills.generic` | — | Startup skill for new generic agents |
-| `agentrus.defaultShells` | `[]` | Shells every new initiative starts with, e.g. `["dev", "logs"]` |
-| `agentrus.terminalLocation` | `panel` | `panel` or `editor` — where agent and shell terminals open |
-| `agentrus.activityPollSeconds` | `3` | How often to check the transcript of an open agent that has no hook state; `0` disables |
+| `agentrus.models.<agent>` | `opus` | Model for new agents of that role |
+| `agentrus.skills.<agent>` | — | Startup skill for new agents of that role |
+| `agentrus.defaultShells` | `[]` | Shells every new initiative starts with |
+| `agentrus.terminalLocation` | `panel` | `panel` or `editor` |
+| `agentrus.activityPollSeconds` | `3` | Transcript fallback interval; `0` disables |
 | `agentrus.worktreeRoot` | `../<repo>-worktrees` | Where worktrees are created |
-| `agentrus.copyToWorktree` | `[".env"]` | Untracked files copied into each new worktree; `**/name` matches recursively |
-| `agentrus.branchPrefix` | `initiative/` | Prefix for initiative branches |
-| `agentrus.claudeCommand` | `claude` | Command used to launch Claude Code |
+| `agentrus.copyToWorktree` | `[".env"]` | Untracked files copied into new worktrees; `**/name` matches recursively |
+| `agentrus.branchPrefix` | `initiative/` | Prefix for new branches |
+| `agentrus.claudeCommand` | `claude` | Command that launches Claude Code |
 
-The initiative list is stored per repository, keyed by the main repo's root — a window on the repo and a window on any of its worktrees see the same initiatives. It stays local to your machine.
+`<agent>` is one of `orchestrator`, `architect`, `dev`, `reviewer`, `qa` or `generic`. Initiatives are stored per repository on your machine, and every worktree window of that repo sees the same list.
 
 ## Development
 
@@ -202,13 +161,11 @@ npm install
 npm run watch    # rebuild on change
 ```
 
-Press `F5` to launch an Extension Development Host with Agent"R"Us loaded.
-
-To install a build into your everyday VS Code:
+Press `F5` for an Extension Development Host. To install a build:
 
 ```sh
 npx @vscode/vsce package --allow-missing-repository --skip-license
 code --install-extension agentrus-<version>.vsix --force
 ```
 
-An install does not hot-swap the running extension — run **Developer: Reload Window** to pick it up.
+Then run **Developer: Reload Window**.
