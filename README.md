@@ -67,7 +67,7 @@ While an agent's terminal is open, its card shows a status chip:
 - Each conversation is named `{initiative}-{agent}`, e.g. `Auth revamp-architect`. The same name shows in the sidebar, the terminal tab and Claude's `/resume` picker.
 - Whether a click starts or resumes a conversation is decided from Claude's transcripts on disk.
 - Changing an agent's model keeps its conversation.
-- **Start fresh session** deletes the transcript, so the agent starts over under the same name.
+- **Start Fresh Session** deletes the transcript, so the agent starts over under the same name.
 - Initiative names must be unique. Names that differ only in punctuation count as the same.
 
 ## Worktrees
@@ -122,21 +122,23 @@ Open a git repository, then the Agent"R"Us view in the activity bar.
 - Initiative, agent and shell cards have a **cog** with the same actions as their right-click menu.
 - **`+`** creates an initiative. **Refresh** re-checks worktrees against git.
 - Initiatives start collapsed, except the one this window is open on, which carries a **this window** badge.
-- Reorder initiatives by dragging, or with **Move up** / **Move down**.
+- Reorder initiatives by dragging, or with **Move Initiative Up** / **Move Initiative Down**.
 
 | Action | Where | |
 | --- | --- | --- |
-| Open all agents | initiative, Agents group | Esc on a skill prompt cancels the batch |
-| Add agent | initiative, Agents group | A missing default, or one you name yourself |
-| Remove agent | agent you added | Keeps the transcript, so re-adding resumes it |
-| Change model / startup skill | agent | Applies on the next launch |
-| Start fresh session | agent | Deletes the transcript |
-| Open worktree in this / new window | initiative | Conversations resume on the next click |
-| Add doc | initiative, Docs group | New Markdown file or a link to one |
-| New shell | initiative, Shells group | |
-| Rename / Remove shell | shell | |
-| Add default shells | Shells group | Adds `agentrus.defaultShells` |
-| Remove initiative | initiative | See [Removing](#removing) |
+| Open All Agents | initiative, Agents group | Esc on a skill prompt cancels the batch |
+| Add Agent | initiative, Agents group | A missing default, or one you name yourself |
+| Remove Agent | agent you added | Keeps the transcript, so re-adding resumes it |
+| Change Agent Model / Change Startup Skill | agent | Applies on the next launch |
+| Start Fresh Session | agent | Deletes the transcript |
+| Open Worktree in This / New Window | initiative | Conversations resume on the next click |
+| Add Doc | initiative, Docs group | New Markdown file or a link to one |
+| New Shell | initiative, Shells group | |
+| Rename / Remove Shell | shell | |
+| Add Default Shells | Shells group | Adds `agentrus.defaultShells` |
+| Remove Initiative | initiative | See [Removing](#removing) |
+| Remove Initiatives… | view `...` menu | Several at once, one after another |
+| Open Archived Docs / Copy Archive Path / Open Settings | view `...` menu | |
 
 ## Settings
 

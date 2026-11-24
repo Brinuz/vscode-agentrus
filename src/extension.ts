@@ -360,24 +360,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       await hub(initiative.name, payload, [
-        { label: "$(run-all) Open all agents", command: "agentrus.openAllAgents" },
-        { label: "$(person-add) Add agent", command: "agentrus.addAgent" },
-        { label: "$(add) New shell", command: "agentrus.newShell" },
-        { label: "$(new-file) Add doc", command: "agentrus.addDoc" },
-        { label: "$(folder-opened) Reveal docs folder", command: "agentrus.revealDocsFolder" },
+        { label: "$(run-all) Open All Agents", command: "agentrus.openAllAgents" },
+        { label: "$(person-add) Add Agent", command: "agentrus.addAgent" },
+        { label: "$(add) New Shell", command: "agentrus.newShell" },
+        { label: "$(new-file) Add Doc", command: "agentrus.addDoc" },
+        { label: "$(folder-opened) Reveal Docs Folder", command: "agentrus.revealDocsFolder" },
         {
-          label: "$(arrow-swap) Open worktree in this window",
+          label: "$(arrow-swap) Open Worktree in This Window",
           description: initiative.worktreePath,
           command: "agentrus.openWorktreeHere",
         },
         {
-          label: "$(empty-window) Open worktree in new window",
+          label: "$(empty-window) Open Worktree in New Window",
           command: "agentrus.openWorktreeWindow",
         },
-        { label: "$(arrow-up) Move up", command: "agentrus.moveInitiativeUp" },
-        { label: "$(arrow-down) Move down", command: "agentrus.moveInitiativeDown" },
-        { label: "$(trash) Remove initiative", command: "agentrus.removeInitiative" },
-        { label: "$(gear) Extension settings", command: "agentrus.openSettings" },
+        { label: "$(arrow-up) Move Initiative Up", command: "agentrus.moveInitiativeUp" },
+        { label: "$(arrow-down) Move Initiative Down", command: "agentrus.moveInitiativeDown" },
+        { label: "$(trash) Remove Initiative", command: "agentrus.removeInitiative" },
       ]);
     }),
 
@@ -389,18 +388,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const { initiative, agent } = found;
       await hub(`${agent.role} — ${initiative.name}`, payload, [
         {
-          label: "$(settings-gear) Model",
+          label: "$(settings-gear) Change Agent Model",
           description: agent.model,
           command: "agentrus.changeModel",
         },
         {
-          label: "$(sparkle) Startup skill",
+          label: "$(sparkle) Change Startup Skill",
           description: agent.skill ? `/${agent.skill}` : "none",
           command: "agentrus.changeSkill",
         },
-        { label: "$(debug-restart) Start fresh session", command: "agentrus.resetSession" },
+        { label: "$(debug-restart) Start Fresh Session", command: "agentrus.resetSession" },
         ...(agent.custom
-          ? [{ label: "$(trash) Remove agent", command: "agentrus.removeAgent" }]
+          ? [{ label: "$(trash) Remove Agent", command: "agentrus.removeAgent" }]
           : []),
       ]);
     }),
@@ -411,8 +410,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       await hub(`${found.shell.name} — ${found.initiative.name}`, payload, [
-        { label: "$(edit) Rename shell", command: "agentrus.renameShell" },
-        { label: "$(trash) Remove shell", command: "agentrus.removeShell" },
+        { label: "$(edit) Rename Shell", command: "agentrus.renameShell" },
+        { label: "$(trash) Remove Shell", command: "agentrus.removeShell" },
       ]);
     }),
 
@@ -829,6 +828,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
       } finally {
         removing.delete(initiative.id);
+      }
+    }),
+
+    vscode.commands.registerCommand("agentrus.removeInitiatives", async () => {
+      const current = await requireRoot();
+      if (!current) {
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        store
+          .all()
+          .filter((i) => !removing.has(i.id))
+          .map((initiative) => ({
+            label: initiative.name,
+            description: initiative.managed ? initiative.branch : "no worktree of its own",
+            initiative,
+          })),
+        {
+          title: "Remove initiatives",
+          placeHolder: "Pick the initiatives to remove",
+          canPickMany: true,
+        },
+      );
+      // Another removal may have started while the picker was open.
+      const initiatives = (picked ?? [])
+        .map((row) => row.initiative)
+        .filter((i) => !removing.has(i.id));
+      if (initiatives.length === 0) {
+        return;
+      }
+      for (const initiative of initiatives) {
+        removing.add(initiative.id);
+      }
+      try {
+        if (initiatives.length === 1) {
+          await removeInitiative(context, current, initiatives[0], store, terminals, view);
+        } else {
+          await removeInitiatives(context, current, initiatives, store, terminals, view);
+        }
+        await resolveCurrent();
+        view.refresh();
+      } finally {
+        for (const initiative of initiatives) {
+          removing.delete(initiative.id);
+        }
       }
     }),
   );
@@ -1458,11 +1502,16 @@ async function removeInitiative(
     if (!docsChoice) {
       return;
     }
-    terminals.disposeInitiative(initiative);
-    await removeInitiativeHookFiles(context, initiative);
-    await disposeDocs(context, initiative, docsChoice, undefined);
-    await store.remove(initiative.id);
-    view.refresh();
+    await performRemoval(
+      context,
+      root,
+      initiative,
+      { deleteBranch: false, docsChoice },
+      store,
+      terminals,
+      view,
+      () => {},
+    );
     return;
   }
 
@@ -1499,41 +1548,17 @@ async function removeInitiative(
 
   const detached = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Removing "${initiative.name}"` },
-    async (progress): Promise<Detached | undefined> => {
-      // Read before the worktree goes, for the archive's manifest.
-      const head = await headSha(initiative.worktreePath).catch(() => undefined);
-
-      progress.report({ message: "closing its terminals…" });
-      await terminals.closeInitiative(initiative, 5000);
-      await removeInitiativeHookFiles(context, initiative);
-
-      progress.report({ message: "removing the worktree…" });
-      let result: Detached;
-      try {
-        result = await detachWorktree(root, initiative.worktreePath);
-      } catch (error) {
-        vscode.window.showErrorMessage(
-          `Could not remove the worktree for "${initiative.name}": ${message(error)}`,
-        );
-        return undefined;
-      }
-
-      if (confirmed === "Remove worktree and branch" && initiative.branch) {
-        try {
-          await deleteBranch(root, initiative.branch, true);
-        } catch (error) {
-          vscode.window.showWarningMessage(
-            `Worktree removed, but the branch "${initiative.branch}" is still there: ${message(error)}`,
-          );
-        }
-      }
-
-      progress.report({ message: "tidying up its docs…" });
-      await disposeDocs(context, initiative, docsChoice, head);
-      await store.remove(initiative.id);
-      view.refresh();
-      return result;
-    },
+    (progress) =>
+      performRemoval(
+        context,
+        root,
+        initiative,
+        { deleteBranch: confirmed === "Remove worktree and branch", docsChoice },
+        store,
+        terminals,
+        view,
+        (step) => progress.report({ message: step }),
+      ),
   );
 
   // The initiative is gone by now; what remains is only disk space, so it is
@@ -1541,6 +1566,184 @@ async function removeInitiative(
   if (detached) {
     void deleteLeftovers(initiative, detached);
   }
+}
+
+/**
+ * Asks once for the whole batch, then removes one initiative after another:
+ * each closes terminals and moves a worktree aside, and running those side by
+ * side only makes them fight over the same repo.
+ */
+async function removeInitiatives(
+  context: vscode.ExtensionContext,
+  root: string,
+  initiatives: Initiative[],
+  store: Store,
+  terminals: Terminals,
+  view: InitiativesViewProvider,
+): Promise<void> {
+  const names = initiatives.map((i) => `"${i.name}"`).join(", ");
+  const anyManaged = initiatives.some((i) => i.managed);
+  const confirmed = await vscode.window.showWarningMessage(
+    `Remove ${initiatives.length} initiatives?`,
+    {
+      modal: true,
+      detail: anyManaged
+        ? `${names}.\n\nThis deletes their worktrees. Branches are kept unless you choose otherwise.`
+        : `${names}.\n\nTheir agents and shells are forgotten. No repo is touched.`,
+    },
+    ...(anyManaged ? ["Remove worktrees", "Remove worktrees and branches"] : ["Remove"]),
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  const withDocs = new Set<string>();
+  for (const initiative of initiatives) {
+    if (await hasDocs(context, initiative)) {
+      withDocs.add(initiative.id);
+    }
+  }
+  let docsChoice: DocsChoice | undefined = "Nothing to keep";
+  if (withDocs.size > 0) {
+    docsChoice = await vscode.window.showWarningMessage(
+      "What should happen to the docs of these initiatives?",
+      {
+        modal: true,
+        detail: `Archive moves each docs folder to ${archiveRoot(context)}, with a note of the branch, commit, agents and linked docs. Delete sends them to the trash. Linked files outside them are never deleted.`,
+      },
+      "Archive docs",
+      "Delete docs",
+    );
+    if (!docsChoice) {
+      return;
+    }
+  }
+
+  const dirty: Initiative[] = [];
+  for (const initiative of initiatives) {
+    if (!initiative.managed) {
+      continue;
+    }
+    if (await hasUncommittedWork(initiative.worktreePath).catch(() => false)) {
+      dirty.push(initiative);
+    }
+  }
+  let toRemove = initiatives;
+  if (dirty.length > 0) {
+    const dirtyNames = dirty.map((i) => `"${i.name}"`).join(", ");
+    const force = await vscode.window.showWarningMessage(
+      `These worktrees have uncommitted changes or untracked files: ${dirtyNames}.`,
+      { modal: true, detail: "Removing them discards those changes." },
+      "Discard them and remove",
+      "Skip those",
+    );
+    if (!force) {
+      return;
+    }
+    if (force === "Skip those") {
+      toRemove = initiatives.filter((i) => !dirty.includes(i));
+    }
+  }
+  if (toRemove.length === 0) {
+    return;
+  }
+
+  const leftovers: { initiative: Initiative; detached: Detached }[] = [];
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Removing ${toRemove.length} initiatives`,
+    },
+    async (progress) => {
+      for (const [index, initiative] of toRemove.entries()) {
+        const at = `${index + 1} of ${toRemove.length}, "${initiative.name}"`;
+        progress.report({ message: at });
+        const detached = await performRemoval(
+          context,
+          root,
+          initiative,
+          {
+            deleteBranch: confirmed === "Remove worktrees and branches",
+            docsChoice: withDocs.has(initiative.id) ? docsChoice : "Nothing to keep",
+          },
+          store,
+          terminals,
+          view,
+          (step) => progress.report({ message: `${at}: ${step}` }),
+        );
+        if (detached) {
+          leftovers.push({ initiative, detached });
+        }
+      }
+    },
+  );
+
+  for (const { initiative, detached } of leftovers) {
+    void deleteLeftovers(initiative, detached);
+  }
+}
+
+interface RemovalChoices {
+  deleteBranch: boolean;
+  docsChoice: DocsChoice;
+}
+
+/**
+ * Everything a removal does once the user has answered. Undefined when the
+ * worktree could not be removed, which leaves the initiative in place.
+ */
+async function performRemoval(
+  context: vscode.ExtensionContext,
+  root: string,
+  initiative: Initiative,
+  choices: RemovalChoices,
+  store: Store,
+  terminals: Terminals,
+  view: InitiativesViewProvider,
+  report: (step: string) => void,
+): Promise<Detached | undefined> {
+  if (!initiative.managed) {
+    terminals.disposeInitiative(initiative);
+    await removeInitiativeHookFiles(context, initiative);
+    await disposeDocs(context, initiative, choices.docsChoice, undefined);
+    await store.remove(initiative.id);
+    view.refresh();
+    return undefined;
+  }
+
+  // Read before the worktree goes, for the archive's manifest.
+  const head = await headSha(initiative.worktreePath).catch(() => undefined);
+
+  report("closing its terminals…");
+  await terminals.closeInitiative(initiative, 5000);
+  await removeInitiativeHookFiles(context, initiative);
+
+  report("removing the worktree…");
+  let result: Detached;
+  try {
+    result = await detachWorktree(root, initiative.worktreePath);
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Could not remove the worktree for "${initiative.name}": ${message(error)}`,
+    );
+    return undefined;
+  }
+
+  if (choices.deleteBranch && initiative.branch) {
+    try {
+      await deleteBranch(root, initiative.branch, true);
+    } catch (error) {
+      vscode.window.showWarningMessage(
+        `Worktree removed, but the branch "${initiative.branch}" is still there: ${message(error)}`,
+      );
+    }
+  }
+
+  report("tidying up its docs…");
+  await disposeDocs(context, initiative, choices.docsChoice, head);
+  await store.remove(initiative.id);
+  view.refresh();
+  return result;
 }
 
 async function deleteLeftovers(initiative: Initiative, detached: Detached): Promise<void> {

@@ -43,161 +43,200 @@
     "commands": [
       {
         "command": "agentrus.createInitiative",
-        "title": "Agent\"R\"Us: Create Initiative",
+        "title": "Create Initiative",
+        "category": "Agent\"R\"Us",
         "icon": "$(add)"
       },
       {
         "command": "agentrus.refresh",
-        "title": "Agent\"R\"Us: Refresh",
+        "title": "Refresh",
+        "category": "Agent\"R\"Us",
         "icon": "$(refresh)"
       },
       {
         "command": "agentrus.openAgent",
-        "title": "Agent\"R\"Us: Open Agent Session"
+        "title": "Open Agent Session",
+        "category": "Agent\"R\"Us"
       },
       {
         "command": "agentrus.openAllAgents",
-        "title": "Agent\"R\"Us: Open All Agents",
+        "title": "Open All Agents",
+        "category": "Agent\"R\"Us",
         "icon": "$(run-all)"
       },
       {
         "command": "agentrus.openWorktreeWindow",
-        "title": "Agent\"R\"Us: Open Worktree in New Window",
+        "title": "Open Worktree in New Window",
+        "category": "Agent\"R\"Us",
         "icon": "$(empty-window)"
       },
       {
         "command": "agentrus.openWorktreeHere",
-        "title": "Agent\"R\"Us: Open Worktree in This Window",
+        "title": "Open Worktree in This Window",
+        "category": "Agent\"R\"Us",
         "icon": "$(arrow-swap)"
       },
       {
         "command": "agentrus.removeInitiative",
-        "title": "Agent\"R\"Us: Remove Initiative",
+        "title": "Remove Initiative",
+        "category": "Agent\"R\"Us",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentrus.removeInitiatives",
+        "title": "Remove Initiatives…",
+        "category": "Agent\"R\"Us",
         "icon": "$(trash)"
       },
       {
         "command": "agentrus.changeModel",
-        "title": "Agent\"R\"Us: Change Agent Model"
+        "title": "Change Agent Model",
+        "category": "Agent\"R\"Us"
       },
       {
         "command": "agentrus.configureInitiative",
-        "title": "Agent\"R\"Us: Configure Initiative",
+        "title": "Configure Initiative",
+        "category": "Agent\"R\"Us",
         "icon": "$(settings-gear)"
       },
       {
         "command": "agentrus.configureAgent",
-        "title": "Agent\"R\"Us: Configure Agent",
+        "title": "Configure Agent",
+        "category": "Agent\"R\"Us",
         "icon": "$(settings-gear)"
       },
       {
         "command": "agentrus.configureShell",
-        "title": "Agent\"R\"Us: Configure Shell",
+        "title": "Configure Shell",
+        "category": "Agent\"R\"Us",
         "icon": "$(settings-gear)"
       },
       {
         "command": "agentrus.addAgent",
-        "title": "Agent\"R\"Us: Add Agent",
+        "title": "Add Agent",
+        "category": "Agent\"R\"Us",
         "icon": "$(person-add)"
       },
       {
         "command": "agentrus.removeAgent",
-        "title": "Agent\"R\"Us: Remove Agent",
+        "title": "Remove Agent",
+        "category": "Agent\"R\"Us",
         "icon": "$(trash)"
       },
       {
         "command": "agentrus.moveInitiativeUp",
-        "title": "Agent\"R\"Us: Move Initiative Up",
+        "title": "Move Initiative Up",
+        "category": "Agent\"R\"Us",
         "icon": "$(arrow-up)"
       },
       {
         "command": "agentrus.moveInitiativeDown",
-        "title": "Agent\"R\"Us: Move Initiative Down",
+        "title": "Move Initiative Down",
+        "category": "Agent\"R\"Us",
         "icon": "$(arrow-down)"
       },
       {
         "command": "agentrus.openSettings",
-        "title": "Agent\"R\"Us: Open Settings",
+        "title": "Open Settings",
+        "category": "Agent\"R\"Us",
         "icon": "$(gear)"
       },
       {
         "command": "agentrus.resetSession",
-        "title": "Agent\"R\"Us: Start Fresh Session",
+        "title": "Start Fresh Session",
+        "category": "Agent\"R\"Us",
         "icon": "$(debug-restart)"
       },
       {
         "command": "agentrus.changeSkill",
-        "title": "Agent\"R\"Us: Change Startup Skill",
+        "title": "Change Startup Skill",
+        "category": "Agent\"R\"Us",
         "icon": "$(sparkle)"
       },
       {
         "command": "agentrus.newShell",
-        "title": "Agent\"R\"Us: New Shell",
+        "title": "New Shell",
+        "category": "Agent\"R\"Us",
         "icon": "$(add)"
       },
       {
         "command": "agentrus.openShell",
-        "title": "Agent\"R\"Us: Open Shell"
+        "title": "Open Shell",
+        "category": "Agent\"R\"Us"
       },
       {
         "command": "agentrus.renameShell",
-        "title": "Agent\"R\"Us: Rename Shell",
+        "title": "Rename Shell",
+        "category": "Agent\"R\"Us",
         "icon": "$(edit)"
       },
       {
         "command": "agentrus.addDefaultShells",
-        "title": "Agent\"R\"Us: Add Default Shells",
+        "title": "Add Default Shells",
+        "category": "Agent\"R\"Us",
         "icon": "$(list-unordered)"
       },
       {
         "command": "agentrus.removeShell",
-        "title": "Agent\"R\"Us: Remove Shell",
+        "title": "Remove Shell",
+        "category": "Agent\"R\"Us",
         "icon": "$(trash)"
       },
       {
         "command": "agentrus.addDoc",
-        "title": "Agent\"R\"Us: Add Doc",
+        "title": "Add Doc",
+        "category": "Agent\"R\"Us",
         "icon": "$(add)"
       },
       {
         "command": "agentrus.removeDoc",
-        "title": "Agent\"R\"Us: Remove Doc from Initiative",
+        "title": "Remove Doc from Initiative",
+        "category": "Agent\"R\"Us",
         "icon": "$(close)"
       },
       {
         "command": "agentrus.revealDocsFolder",
-        "title": "Agent\"R\"Us: Reveal Docs Folder",
+        "title": "Reveal Docs Folder",
+        "category": "Agent\"R\"Us",
         "icon": "$(folder-opened)"
       },
       {
         "command": "agentrus.copyArchivePath",
-        "title": "Agent\"R\"Us: Copy Archive Path"
+        "title": "Copy Archive Path",
+        "category": "Agent\"R\"Us"
       },
       {
         "command": "agentrus.openArchivedDocs",
-        "title": "Agent\"R\"Us: Open Archived Docs"
+        "title": "Open Archived Docs",
+        "category": "Agent\"R\"Us"
       },
       {
         "command": "agentrus.openDoc",
-        "title": "Agent\"R\"Us: Open Doc"
+        "title": "Open Doc",
+        "category": "Agent\"R\"Us"
       },
       {
         "command": "agentrus.revealDoc",
-        "title": "Agent\"R\"Us: Reveal Doc in Finder",
+        "title": "Reveal Doc in Finder",
+        "category": "Agent\"R\"Us",
         "icon": "$(folder-opened)"
       },
       {
         "command": "agentrus.deleteDocFile",
-        "title": "Agent\"R\"Us: Delete Doc File",
+        "title": "Delete Doc File",
+        "category": "Agent\"R\"Us",
         "icon": "$(trash)"
       },
       {
         "command": "agentrus.revealDocSubfolder",
-        "title": "Agent\"R\"Us: Reveal Folder in Finder",
+        "title": "Reveal Folder in Finder",
+        "category": "Agent\"R\"Us",
         "icon": "$(folder-opened)"
       },
       {
         "command": "agentrus.deleteDocSubfolder",
-        "title": "Agent\"R\"Us: Delete Folder",
+        "title": "Delete Folder",
+        "category": "Agent\"R\"Us",
         "icon": "$(trash)"
       }
     ],
@@ -212,6 +251,26 @@
           "command": "agentrus.refresh",
           "when": "view == agentrus.initiatives",
           "group": "navigation@2"
+        },
+        {
+          "command": "agentrus.removeInitiatives",
+          "when": "view == agentrus.initiatives",
+          "group": "1_initiatives@1"
+        },
+        {
+          "command": "agentrus.openArchivedDocs",
+          "when": "view == agentrus.initiatives",
+          "group": "2_archive@1"
+        },
+        {
+          "command": "agentrus.copyArchivePath",
+          "when": "view == agentrus.initiatives",
+          "group": "2_archive@2"
+        },
+        {
+          "command": "agentrus.openSettings",
+          "when": "view == agentrus.initiatives",
+          "group": "3_settings@1"
         }
       ],
       "webview/context": [
@@ -264,11 +323,6 @@
           "command": "agentrus.removeInitiative",
           "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
           "group": "3_modify@1"
-        },
-        {
-          "command": "agentrus.openSettings",
-          "when": "webviewId == 'agentrus.initiatives' && webviewSection == 'initiative'",
-          "group": "4_settings@1"
         },
         {
           "command": "agentrus.openAllAgents",

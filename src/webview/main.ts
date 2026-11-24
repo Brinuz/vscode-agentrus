@@ -107,19 +107,19 @@ function initiativeSection(initiative: InitiativeCard, current: boolean): HTMLEl
   const children = el("div", "children");
   children.append(
     group(initiative, "agents", "organization", "Agents", initiative.agents.length, [
-      action("run-all", "Open all agents", "agentrus.openAllAgents", { initiativeId: initiative.id }),
-      action("person-add", "Add agent", "agentrus.addAgent", { initiativeId: initiative.id }),
+      action("run-all", "Open All Agents", "agentrus.openAllAgents", { initiativeId: initiative.id }),
+      action("person-add", "Add Agent", "agentrus.addAgent", { initiativeId: initiative.id }),
     ]),
     groupBody(initiative, "agents", initiative.agents.map((agent) => agentRow(initiative, agent))),
     group(initiative, "docs", "book", "Docs", initiative.docs.length, [
-      action("add", "Add doc", "agentrus.addDoc", { initiativeId: initiative.id }),
-      action("folder-opened", "Reveal docs folder", "agentrus.revealDocsFolder", {
+      action("add", "Add Doc", "agentrus.addDoc", { initiativeId: initiative.id }),
+      action("folder-opened", "Reveal Docs Folder", "agentrus.revealDocsFolder", {
         initiativeId: initiative.id,
       }),
     ]),
     groupBody(initiative, "docs", docLevel(initiative, "", 0)),
     group(initiative, "shells", "terminal", "Shells", initiative.shells.length, [
-      action("add", "New shell", "agentrus.newShell", { initiativeId: initiative.id }),
+      action("add", "New Shell", "agentrus.newShell", { initiativeId: initiative.id }),
     ]),
     groupBody(initiative, "shells", initiative.shells.map((shell) => shellRow(initiative, shell))),
   );
@@ -164,10 +164,10 @@ function initiativeHeader(initiative: InitiativeCard, current: boolean): HTMLEle
   }
   card.append(
     actions([
-      action("run-all", "Open all agents", "agentrus.openAllAgents", {
+      action("run-all", "Open All Agents", "agentrus.openAllAgents", {
         initiativeId: initiative.id,
       }),
-      action("settings-gear", "Configure initiative", "agentrus.configureInitiative", {
+      action("settings-gear", "Configure Initiative", "agentrus.configureInitiative", {
         initiativeId: initiative.id,
       }),
     ]),
@@ -241,7 +241,7 @@ function agentRow(initiative: InitiativeCard, agent: AgentCard): HTMLElement {
   card.append(
     codicon(agent.icon),
     lines,
-    actions([action("settings-gear", "Configure agent", "agentrus.configureAgent", payload)]),
+    actions([action("settings-gear", "Configure Agent", "agentrus.configureAgent", payload)]),
   );
   card.addEventListener("click", () => send("agentrus.openAgent", payload));
   return card;
@@ -329,7 +329,7 @@ function folderRows(initiative: InitiativeCard, folder: DocFolderCard, depth: nu
     codicon(open ? "folder-opened" : "folder"),
     el("span", "name", folder.name),
     el("span", "count", String(files)),
-    actions([action("folder-opened", "Reveal folder in Finder", "agentrus.revealDocSubfolder", payload)]),
+    actions([action("folder-opened", "Reveal Folder in Finder", "agentrus.revealDocSubfolder", payload)]),
   );
 
   const body = el("div", "doc-folder-body");
@@ -395,9 +395,9 @@ function docRow(initiative: InitiativeCard, doc: DocCard, depth: number): HTMLEl
   card.append(
     actions([
       ...(doc.linked
-        ? [action("close", "Remove doc from initiative", "agentrus.removeDoc", payload)]
+        ? [action("close", "Remove Doc from Initiative", "agentrus.removeDoc", payload)]
         : []),
-      action("folder-opened", "Reveal doc in Finder", "agentrus.revealDoc", payload),
+      action("folder-opened", "Reveal Doc in Finder", "agentrus.revealDoc", payload),
     ]),
   );
   card.addEventListener("click", () => send("agentrus.openDoc", payload));
@@ -414,7 +414,7 @@ function shellRow(initiative: InitiativeCard, shell: ShellCard): HTMLElement {
     card.append(el("span", "chip idle", "live"));
   }
   card.append(
-    actions([action("settings-gear", "Configure shell", "agentrus.configureShell", payload)]),
+    actions([action("settings-gear", "Configure Shell", "agentrus.configureShell", payload)]),
   );
   card.addEventListener("click", () => send("agentrus.openShell", payload));
   return card;
